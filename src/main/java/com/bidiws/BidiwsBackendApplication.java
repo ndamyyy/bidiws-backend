@@ -1,4 +1,4 @@
-package com.bidiws.bidiws_backend;
+package com.bidiws;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
