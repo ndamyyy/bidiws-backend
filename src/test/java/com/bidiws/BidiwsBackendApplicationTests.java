@@ -1,4 +1,4 @@
-package com.bidiws.bidiws_backend;
+package com.bidiws;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
