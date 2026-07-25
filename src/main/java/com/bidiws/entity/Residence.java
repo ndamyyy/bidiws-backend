@@ -62,6 +62,7 @@ public class Residence extends CreatedAtEntity {
     private Boolean actif = true;
 
     @OneToMany(mappedBy = "residence", fetch = FetchType.LAZY)
+    @Builder.Default
     private List<ResidenceGardien> gardiens =  new ArrayList<>();
 
     public void ajouterGardien(ResidenceGardien rg) {
