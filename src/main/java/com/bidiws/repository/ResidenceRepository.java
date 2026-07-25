@@ -19,5 +19,5 @@ public interface ResidenceRepository extends JpaRepository<Residence, Long> {
 
     List<Residence> findByActifTrue();
 
-    List<Residence> findByVilleIdAndActifTrue();
+    List<Residence> findByVilleIdAndActifTrue(Long villeId);
 }

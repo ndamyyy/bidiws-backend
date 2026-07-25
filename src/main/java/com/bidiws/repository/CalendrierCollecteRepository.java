@@ -13,7 +13,7 @@ public interface CalendrierCollecteRepository extends JpaRepository<CalendrierCo
 
     List<CalendrierCollecte> findByResidenceIdAndActifTrue(Long residenceId);
 
-    List<CalendrierCollecte> findByResidenceIdQndJourSemaine(Long residenceId, Short jourSemaine);
+    List<CalendrierCollecte> findByResidenceIdAndJourSemaine(Long residenceId, Short jourSemaine);
 
     List<CalendrierCollecte> findByTypeCollecteId(Long typeCollecteId);
 

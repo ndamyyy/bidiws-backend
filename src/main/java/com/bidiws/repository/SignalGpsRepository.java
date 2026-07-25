@@ -17,6 +17,6 @@ public interface SignalGpsRepository extends JpaRepository<SignalGps, Long> {
 
     Optional<SignalGps> findFirstByTourneeIdOrderByHorodatageDesc(Long tourneeId);
 
-    List<SignalGps> findByTourneeIdQndHorodatageBetween(Long tourneeId, LocalDateTime debut, LocalDateTime fin);
+    List<SignalGps> findByTourneeIdAndHorodatageBetween(Long tourneeId, LocalDateTime debut, LocalDateTime fin);
 
 }
