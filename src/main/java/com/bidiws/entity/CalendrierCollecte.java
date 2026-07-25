@@ -31,7 +31,7 @@ public class CalendrierCollecte {
     @Column(name = "jour_semaine", nullable = false)
     @Min(1)
     @Max(7)
-    private Short jour;
+    private Short jourSemaine;
 
     @Column(name = "heure_estimee")
     private LocalTime heureEstimee;
