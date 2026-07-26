@@ -37,8 +37,8 @@ public class SecurityConfig {
     private String allowedOrigin;
 
     private static final String[] PUBLIC_ROUTES = {
-            "/api/auth/login",
-            "/api/auth/register",
+            "/auth/login",
+            "/auth/register",
             "/ws/**"
     };
 
@@ -50,6 +50,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ROUTES).permitAll()
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
