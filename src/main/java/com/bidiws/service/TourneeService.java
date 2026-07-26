@@ -26,7 +26,7 @@ public class TourneeService {
     private final ZoneRepository zoneRepository;
 
     @Transactional
-    public TourneeResponseDto creer(TourneeRequestDto dto) {
+    public TourneeResponseDto create(TourneeRequestDto dto) {
 
         TypeCollecte typeCollecte = typeCollecteRepository.findById(dto.typeCollecteId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Type de collecte introuvable"));

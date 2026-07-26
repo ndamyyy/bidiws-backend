@@ -45,7 +45,7 @@ public class CalendrierCollecteService {
     }
 
     @Transactional
-    public CalendrierCollecteResponseDto modifier(Long id, CalendrierCollecteRequestDto dto) {
+    public CalendrierCollecteResponseDto update(Long id, CalendrierCollecteRequestDto dto) {
 
         CalendrierCollecte calendrier = calendrierCollecteRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Calendrier introuvable"));
