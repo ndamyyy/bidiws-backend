@@ -2,7 +2,7 @@ package com.bidiws.dto.calendriercollecte;
 
 import java.time.LocalTime;
 
-public record CalendrierCollecteResponsetDto(
+public record CalendrierCollecteResponseDto(
         Long id,
         Long residenceId,
         String residenceNom,
