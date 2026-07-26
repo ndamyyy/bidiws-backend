@@ -11,7 +11,7 @@ import java.util.Optional;
 @Repository
 public interface ChauffeurCamionRepository extends JpaRepository<ChauffeurCamion, ChauffeurCamionId> {
 
-    List<ChauffeurCamion> findByChauffeurId(String chauffeurId);
+    List<ChauffeurCamion> findByChauffeurId(Long chauffeurId);
 
     List<ChauffeurCamion> findByCamionId(Long camionId);
 
