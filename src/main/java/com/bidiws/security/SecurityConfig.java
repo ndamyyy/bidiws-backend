@@ -24,6 +24,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static com.bidiws.enums.Role.ADMIN;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -39,6 +41,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ROUTES = {
             "/auth/login",
             "/auth/register",
+            "/error",
             "/ws/**"
     };
 
