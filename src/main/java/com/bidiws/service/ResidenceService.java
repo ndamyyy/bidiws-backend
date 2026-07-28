@@ -30,7 +30,12 @@ public class ResidenceService {
         Ville ville = villeRepository.findById(dto.villeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ville introuvable"));
 
-        Zone zone = resoudreZone(dto.zoneId());
+        if (residenceRepository.existsByVilleIdAndAdresseIgnoreCase(dto.villeId(), dto.adresse())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Une résidence avec cette adresse existe déjà dans cette ville");
+        }
+
+        Zone zone = resoudreZone(dto.zoneId(), dto.villeId());
 
         Residence residence = Residence.builder()
                 .nom(dto.nom())
@@ -58,7 +63,15 @@ public class ResidenceService {
         Ville ville = villeRepository.findById(dto.villeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ville introuvable"));
 
-        Zone zone = resoudreZone(dto.zoneId());
+        boolean adresseChangee = !residence.getAdresse().equalsIgnoreCase(dto.adresse())
+                || !residence.getVille().getId().equals(dto.villeId());
+
+        if (adresseChangee && residenceRepository.existsByVilleIdAndAdresseIgnoreCase(dto.villeId(), dto.adresse())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Une résidence avec cette adresse existe déjà dans cette ville");
+        }
+
+        Zone zone = resoudreZone(dto.zoneId(), dto.villeId());
 
         residence.setNom(dto.nom());
         residence.setAdresse(dto.adresse());
@@ -72,6 +85,21 @@ public class ResidenceService {
         residence.setNbConteneurs(dto.nbConteneurs());
 
         return toResponseDto(residenceRepository.save(residence));
+    }
+
+    private Zone resoudreZone(Long zoneId, Long villeId) {
+        if (zoneId == null) {
+            return null;
+        }
+        Zone zone = zoneRepository.findById(zoneId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Zone introuvable"));
+
+        if (!zone.getVille().getId().equals(villeId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cette zone n'appartient pas à la ville sélectionnée");
+        }
+
+        return zone;
     }
 
     public ResidenceResponseDto getById(Long id) {
