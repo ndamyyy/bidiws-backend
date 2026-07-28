@@ -23,7 +23,7 @@ public class VilleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(villeService.create(dto));
     }
 
-    @PutMapping("{/id}")
+    @PutMapping("/{id}")
     public ResponseEntity<VilleResponseDto> update(
             @PathVariable Long id,
             @Valid @RequestBody VilleRequestDto dto
