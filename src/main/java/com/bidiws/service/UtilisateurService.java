@@ -1,10 +1,8 @@
 package com.bidiws.service;
 
-import com.bidiws.dto.utilisateur.ChangePasswordRequestDto;
-import com.bidiws.dto.utilisateur.UtilisateurRegisterRequestDto;
-import com.bidiws.dto.utilisateur.UtilisateurResponseDto;
-import com.bidiws.dto.utilisateur.UtilisateurUpdateRequestDto;
+import com.bidiws.dto.utilisateur.*;
 import com.bidiws.entity.Utilisateur;
+import com.bidiws.enums.Role;
 import com.bidiws.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,7 +31,7 @@ public class UtilisateurService {
                 .nom(dto.nom())
                 .prenom(dto.prenom())
                 .telephone(dto.telephone())
-                .role(dto.role())
+                .role(Role.HABITANT)
                 .actif(true)
                 .build();
 
@@ -59,6 +57,34 @@ public class UtilisateurService {
         return toResponseDto(utilisateurRepository.save(utilisateur));
     }
 
+    public UtilisateurResponseDto createByAdmin(UtilisateurAdminCreateRequestDto dto) {
+
+        if (utilisateurRepository.existsByEmail(dto.email())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Un compte existe déjà avec cet email");
+        }
+
+        Utilisateur utilisateur = Utilisateur.builder()
+                .email(dto.email())
+                .motDePasse(passwordEncoder.encode(dto.motDePasse()))
+                .nom(dto.nom())
+                .prenom(dto.prenom())
+                .telephone(dto.telephone())
+                .role(dto.role())
+                .actif(true)
+                .build();
+
+        return toResponseDto(utilisateurRepository.save(utilisateur));
+    }
+
+    @Transactional
+    public void resetMotDePasseByAdmin(Long id, ResetPasswordRequestDto dto) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+
+        utilisateur.setMotDePasse(passwordEncoder.encode(dto.nouveauMotDePasse()));
+        utilisateurRepository.save(utilisateur);
+    }
+
     @Transactional
     public void changerMotDePasse(Long id, ChangePasswordRequestDto dto) {
 
@@ -75,8 +101,13 @@ public class UtilisateurService {
 
     private UtilisateurResponseDto toResponseDto(Utilisateur u) {
         return new UtilisateurResponseDto(
-                u.getId(), u.getEmail(), u.getNom(), u.getPrenom(),
-                u.getTelephone(), u.getRole(), u.getActif()
+                u.getId(),
+                u.getEmail(),
+                u.getNom(),
+                u.getPrenom(),
+                u.getTelephone(),
+                u.getRole(),
+                u.getActif()
         );
     }
 }

@@ -23,4 +23,6 @@ public interface TourneeRepository extends JpaRepository<Tournee, Long> {
 
     List<Tournee> findByDateTourneeAndStatut(LocalDate dateTournee, StatutTournee statut);
 
+    boolean existsByIdAndChauffeurId(Long id, Long chauffeurId);
+
 }

@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,11 +20,13 @@ public class TypeCollecteController {
     private final TypeCollecteService  typeCollecteService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TypeCollecteResponseDto> create(@Valid @RequestBody TypeCollecteRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(typeCollecteService.create(dto));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TypeCollecteResponseDto> update(
             @PathVariable long id,
             @Valid @RequestBody TypeCollecteRequestDto dto
@@ -41,6 +44,8 @@ public class TypeCollecteController {
         return ResponseEntity.ok(typeCollecteService.getAll());
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable long id) {
         typeCollecteService.delete(id);
         return ResponseEntity.noContent().build();

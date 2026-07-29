@@ -9,8 +9,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -31,6 +33,7 @@ public class SignalementController {
     }
 
     @PatchMapping("/{id}/statut")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'GARDIEN')")
     public ResponseEntity<SignalementResponseDto> changerStatut(
             @PathVariable Long id,
             @RequestParam StatutSignalement statut
@@ -39,16 +42,26 @@ public class SignalementController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@authorizationService.canAccessSignalement(#id, authentication)")
     public ResponseEntity<SignalementResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(signalementService.getById(id));
     }
 
     @GetMapping("/auteur/{auteurId}")
-    public ResponseEntity<List<SignalementResponseDto>> getByAuteur(@PathVariable Long auteurId) {
+    public ResponseEntity<List<SignalementResponseDto>> getByAuteur(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long auteurId
+    ) {
+        boolean isStaff = userDetails.getAuthorities().stream()
+                .anyMatch(a -> List.of("ROLE_ADMIN", "ROLE_GARDIEN", "ROLE_MAIRIE").contains(a.getAuthority()));
+        if (!isStaff && !userDetails.getId().equals(auteurId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
+        }
         return ResponseEntity.ok(signalementService.getByAuteur(auteurId));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'GARDIEN')")
     public ResponseEntity<List<SignalementResponseDto>> getByStatut(@RequestParam StatutSignalement statut) {
         return ResponseEntity.ok(signalementService.getByStatut(statut));
     }

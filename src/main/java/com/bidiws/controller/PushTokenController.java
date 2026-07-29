@@ -30,14 +30,20 @@ public class PushTokenController {
     }
 
     @PatchMapping("/desactiver")
-    public ResponseEntity<Void> desactiver(@RequestParam String token) {
-        pushTokenService.desactiver(token);
+    public ResponseEntity<Void> desactiver(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam String token
+    ) {
+        pushTokenService.desactiver(token, userDetails.getId());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping
-    public ResponseEntity<Void> delete(@RequestParam String token) {
-        pushTokenService.delete(token);
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam String token
+    ) {
+        pushTokenService.delete(token, userDetails.getId());
         return ResponseEntity.noContent().build();
     }
 

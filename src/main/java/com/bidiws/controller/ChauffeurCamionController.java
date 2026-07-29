@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,11 +20,13 @@ public class ChauffeurCamionController {
     private final ChauffeurCamionService chauffeurCamionService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<ChauffeurCamionResponseDto> affecter(@Valid @RequestBody ChauffeurCamionRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(chauffeurCamionService.affecter(dto));
     }
 
     @PatchMapping("/terminer")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<ChauffeurCamionResponseDto> terminer(
             @RequestParam Long chauffeurId,
             @RequestParam Long camionId

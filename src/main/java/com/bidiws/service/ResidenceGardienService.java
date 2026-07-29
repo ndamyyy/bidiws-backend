@@ -6,6 +6,7 @@ import com.bidiws.entity.Residence;
 import com.bidiws.entity.ResidenceGardien;
 import com.bidiws.entity.ResidenceGardienId;
 import com.bidiws.entity.Utilisateur;
+import com.bidiws.enums.Role;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.UtilisateurRepository;
@@ -33,6 +34,10 @@ public class ResidenceGardienService {
 
         Utilisateur gardien = utilisateurRepository.findById(dto.gardienId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gardien introuvable"));
+
+        if (gardien.getRole() != Role.GARDIEN || !Boolean.TRUE.equals(gardien.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "L'utilisateur sélectionné n'est pas un gardien actif");
+        }
 
         if (dto.principal()) {
             residenceGardienRepository.findByResidenceIdAndPrincipalTrue(dto.residenceId())

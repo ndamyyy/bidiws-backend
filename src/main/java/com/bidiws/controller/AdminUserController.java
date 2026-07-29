@@ -1,12 +1,17 @@
 package com.bidiws.controller;
 
+import com.bidiws.dto.utilisateur.UtilisateurAdminCreateRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurResponseDto;
+import com.bidiws.dto.utilisateur.ResetPasswordRequestDto;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.UtilisateurRepository;
+import com.bidiws.service.UtilisateurService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -18,6 +23,15 @@ import java.util.List;
 public class AdminUserController {
 
     private final UtilisateurRepository utilisateurRepository;
+    private final UtilisateurService utilisateurService;
+
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UtilisateurResponseDto> creerUtilisateur(
+            @Valid @RequestBody UtilisateurAdminCreateRequestDto dto) {
+        UtilisateurResponseDto response = utilisateurService.createByAdmin(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 
     @GetMapping
     public ResponseEntity<List<UtilisateurResponseDto>> rechercher(
@@ -61,6 +75,16 @@ public class AdminUserController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
         utilisateur.setActif(true);
         utilisateurRepository.save(utilisateur);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/mot-de-passe")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> resetMotDePasse(
+            @PathVariable Long id,
+            @Valid @RequestBody ResetPasswordRequestDto dto
+    ) {
+        utilisateurService.resetMotDePasseByAdmin(id, dto);
         return ResponseEntity.noContent().build();
     }
 

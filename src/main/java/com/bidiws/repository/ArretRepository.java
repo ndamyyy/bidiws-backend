@@ -25,4 +25,6 @@ public interface ArretRepository extends JpaRepository<Arret, Long> {
 
     List<Arret> findByResidenceIdOrderByCreatedAtDesc(Long residenceId);
 
+    boolean existsByIdAndTourneeChauffeurId(Long id, Long chauffeurId);
+
 }

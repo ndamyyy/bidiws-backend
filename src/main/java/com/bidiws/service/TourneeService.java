@@ -4,6 +4,7 @@ import com.bidiws.dto.tournee.TourneeRequestDto;
 import com.bidiws.dto.tournee.TourneeResponseDto;
 import com.bidiws.entity.*;
 import com.bidiws.enums.StatutTournee;
+import com.bidiws.enums.Role;
 import com.bidiws.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,14 @@ public class TourneeService {
 
         Utilisateur chauffeur = utilisateurRepository.findById(dto.chauffeurId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chauffeur introuvable"));
+
+        if (chauffeur.getRole() != Role.CHAUFFEUR || !Boolean.TRUE.equals(chauffeur.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "L'utilisateur sélectionné n'est pas un chauffeur actif");
+        }
+
+        if (!Boolean.TRUE.equals(camion.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Le camion sélectionné est inactif");
+        }
 
         Zone zone = resoudreZone(dto.zoneId());
 

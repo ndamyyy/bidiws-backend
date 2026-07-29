@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,21 +22,25 @@ public class TourneeController {
     private final TourneeService tourneeService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<TourneeResponseDto> create(@Valid @RequestBody TourneeRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(tourneeService.create(dto));
     }
 
     @PatchMapping("/{id}/demarrer")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeur(#id, authentication)")
     public ResponseEntity<TourneeResponseDto> demarrer(@PathVariable Long id) {
         return ResponseEntity.ok(tourneeService.demarrer(id));
     }
 
     @PatchMapping("/{id}/terminer")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeur(#id, authentication)")
     public ResponseEntity<TourneeResponseDto> terminer(@PathVariable Long id) {
         return ResponseEntity.ok(tourneeService.terminer(id));
     }
 
     @PatchMapping("/{id}/annuler")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<TourneeResponseDto> annuler(@PathVariable Long id) {
         return ResponseEntity.ok(tourneeService.annuler(id));
     }

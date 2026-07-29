@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -21,21 +22,25 @@ public class SignalGpsController {
     private final SignalGpsService signalGpsService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeur(#dto.tourneeId(), authentication)")
     public ResponseEntity<SignalGpsResponseDto> enregistrer(@Valid @RequestBody SignalGpsRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(signalGpsService.enregistrer(dto));
     }
 
     @GetMapping("/tournee/{tourneeId}/dernier")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeur(#tourneeId, authentication)")
     public ResponseEntity<SignalGpsResponseDto> getDernierSignal(@PathVariable Long tourneeId) {
         return ResponseEntity.ok(signalGpsService.getDernierSignal(tourneeId));
     }
 
     @GetMapping("/tournee/{tourneeId}/trajet")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeur(#tourneeId, authentication)")
     public ResponseEntity<List<SignalGpsResponseDto>> getTrajet(@PathVariable Long tourneeId) {
         return ResponseEntity.ok(signalGpsService.getTrajet(tourneeId));
     }
 
     @GetMapping("/tournee/{tourneeId}/periode")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeur(#tourneeId, authentication)")
     public ResponseEntity<List<SignalGpsResponseDto>> getEntreDates(
             @PathVariable Long tourneeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime debut,

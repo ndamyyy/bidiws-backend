@@ -23,4 +23,6 @@ public interface SignalementRepository extends JpaRepository<Signalement,Long> {
 
     List<Signalement> findByStatutOrderByCreatedAtAsc(StatutSignalement statut);
 
+    boolean existsByIdAndAuteurId(Long id, Long auteurId);
+
 }

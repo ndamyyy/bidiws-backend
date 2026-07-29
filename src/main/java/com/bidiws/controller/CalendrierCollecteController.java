@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,11 +20,13 @@ public class CalendrierCollecteController {
     private final CalendrierCollecteService calendrierCollecteService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<CalendrierCollecteResponseDto> create(@Valid @RequestBody CalendrierCollecteRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(calendrierCollecteService.create(dto));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<CalendrierCollecteResponseDto> update(
             @PathVariable Long id,
             @Valid @RequestBody CalendrierCollecteRequestDto dto
@@ -42,6 +45,7 @@ public class CalendrierCollecteController {
     }
 
     @PatchMapping("/{id}/desactiver")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<Void> desactiver(@PathVariable Long id) {
         calendrierCollecteService.desactiver(id);
         return ResponseEntity.noContent().build();
