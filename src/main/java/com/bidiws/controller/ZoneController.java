@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,11 +20,13 @@ public class ZoneController {
     private final ZoneService zoneService;
 
     @PostMapping
-    public ResponseEntity<ZoneResponseDto> create(ZoneRequestDto dto) {
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ZoneResponseDto> create(@Valid @RequestBody ZoneRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(zoneService.create(dto));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ZoneResponseDto> update(
             @PathVariable Long id,
             @Valid @RequestBody ZoneRequestDto dto
@@ -47,6 +50,7 @@ public class ZoneController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         zoneService.delete(id);
         return ResponseEntity.noContent().build();

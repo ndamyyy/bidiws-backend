@@ -44,17 +44,23 @@ public class PushTokenService {
     }
 
     @Transactional
-    public void desactiver(String token) {
+    public void desactiver(String token, Long utilisateurId) {
         PushToken pushToken = pushTokenRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Token introuvable"));
+
+        verifierProprietaire(pushToken, utilisateurId);
 
         pushToken.setActif(false);
         pushTokenRepository.save(pushToken);
     }
 
     @Transactional
-    public void delete(String token) {
-        pushTokenRepository.deleteByToken(token);
+    public void delete(String token, Long utilisateurId) {
+        PushToken pushToken = pushTokenRepository.findByToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Token introuvable"));
+
+        verifierProprietaire(pushToken, utilisateurId);
+        pushTokenRepository.delete(pushToken);
     }
 
     public List<PushTokenResponseDto> getByUtilisateur(Long utilisateurId) {
@@ -72,5 +78,11 @@ public class PushTokenService {
                 p.getActif(),
                 p.getCreatedAt()
         );
+    }
+
+    private void verifierProprietaire(PushToken pushToken, Long utilisateurId) {
+        if (!pushToken.getUtilisateur().getId().equals(utilisateurId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
+        }
     }
 }

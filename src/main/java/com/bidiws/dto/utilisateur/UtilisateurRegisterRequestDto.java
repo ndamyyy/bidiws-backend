@@ -22,8 +22,5 @@ public record UtilisateurRegisterRequestDto(
         @NotBlank
         String prenom,
 
-        String telephone,
-
-        @NotNull
-        Role role
+        String telephone
 ) {}

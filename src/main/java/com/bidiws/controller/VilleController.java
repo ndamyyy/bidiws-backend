@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,11 +20,13 @@ public class VilleController {
     private final VilleService villeService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<VilleResponseDto> create(@Valid @RequestBody VilleRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(villeService.create(dto));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<VilleResponseDto> update(
             @PathVariable Long id,
             @Valid @RequestBody VilleRequestDto dto
@@ -42,7 +45,8 @@ public class VilleController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<List<VilleResponseDto>> delete(@PathVariable Long id) {
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         villeService.delete(id);
         return ResponseEntity.noContent().build();
     }

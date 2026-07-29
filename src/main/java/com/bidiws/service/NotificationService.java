@@ -63,10 +63,14 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationResponseDto marquerLue(Long id) {
+    public NotificationResponseDto marquerLue(Long id, Long destinataireId) {
 
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification introuvable"));
+
+        if (!notification.getDestinataire().getId().equals(destinataireId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
+        }
 
         notification.setLu(true);
         notification.setHeureLecture(LocalDateTime.now());

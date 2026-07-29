@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,11 +20,13 @@ public class ResidenceGardienController {
     private final ResidenceGardienService residenceGardienService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<ResidenceGardienResponseDto> affecter(@Valid @RequestBody ResidenceGardienRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(residenceGardienService.affecter(dto));
     }
 
     @DeleteMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<Void> retirer(
             @RequestParam Long residenceId,
             @RequestParam Long gardienId

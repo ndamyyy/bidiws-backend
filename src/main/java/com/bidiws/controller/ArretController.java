@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,11 +22,13 @@ public class ArretController {
     private final ArretService arretService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<ArretResponseDto> creer(@Valid @RequestBody ArretRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(arretService.creer(dto));
     }
 
     @PatchMapping("/{id}/statut")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeurForArret(#id, authentication)")
     public ResponseEntity<ArretResponseDto> changerStatut(
             @PathVariable Long id,
             @RequestParam StatutArret statut
@@ -34,6 +37,7 @@ public class ArretController {
     }
 
     @PatchMapping("/{id}/incident")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeurForArret(#id, authentication)")
     public ResponseEntity<ArretResponseDto> signalerIncident(
             @PathVariable Long id,
             @Valid @RequestBody ArretIncidentRequestDto dto

@@ -6,6 +6,7 @@ import com.bidiws.entity.Camion;
 import com.bidiws.entity.ChauffeurCamion;
 import com.bidiws.entity.ChauffeurCamionId;
 import com.bidiws.entity.Utilisateur;
+import com.bidiws.enums.Role;
 import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ChauffeurCamionRepository;
 import com.bidiws.repository.UtilisateurRepository;
@@ -31,6 +32,10 @@ public class ChauffeurCamionService {
 
         Utilisateur chauffeur = utilisateurRepository.findById(dto.chauffeurId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chauffeur introuvable"));
+
+        if (chauffeur.getRole() != Role.CHAUFFEUR || !Boolean.TRUE.equals(chauffeur.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "L'utilisateur sélectionné n'est pas un chauffeur actif");
+        }
 
         Camion camion = camionRepository.findById(dto.camionId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camion introuvable"));
