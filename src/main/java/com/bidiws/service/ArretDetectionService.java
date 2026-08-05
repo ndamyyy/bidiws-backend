@@ -72,6 +72,10 @@ public class ArretDetectionService {
 
         StatutArret ancienStatut = arret.getStatut();
 
+        if (nouveauStatut == StatutArret.INCIDENT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisez le signalement d'incident dédié (POST /arrets/{id}/incident) pour ce statut");
+        }
+
         if (!transitionAutorisee(ancienStatut, nouveauStatut)) {
 
             log.warn(
@@ -124,6 +128,42 @@ public class ArretDetectionService {
 
         return saved;
     }
+
+    /**
+     * Signalement d'incident explicite (action humaine), distinct d'une
+     * détection automatique : contrairement à {@link #appliquerDetection},
+     * cette transition n'est jamais refusée par {@link #transitionAutorisee} —
+     * un incident réellement constaté prime sur un statut déjà confirmé.
+     */
+    @Transactional
+    public Arret signalerIncident(Long arretId, String descriptionIncident, String photoIncidentUrl) {
+
+        Arret arret = arretRepository.findById(arretId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable"));
+
+        StatutArret ancienStatut = arret.getStatut();
+
+        arret.setStatut(StatutArret.INCIDENT);
+        arret.setModeDetection(ModeDetection.VALIDATION_CHAUFFEUR);
+        arret.setIncident(true);
+        arret.setDescriptionIncident(descriptionIncident);
+        arret.setPhotoIncidentUrl(photoIncidentUrl);
+
+        Arret saved = arretRepository.save(arret);
+
+        log.info("Incident signalé sur l'arrêt {} (ancien statut {})", arretId, ancienStatut);
+
+        eventPublisher.publishEvent(new ArretStatutChangeEvent(
+                saved.getId(),
+                saved.getTournee().getId(),
+                saved.getResidence().getId(),
+                ancienStatut,
+                StatutArret.INCIDENT
+        ));
+
+        return saved;
+    }
+
 
     /**
      * Règle de transition centralisée : un arrêt déjà confirmé ou en incident
