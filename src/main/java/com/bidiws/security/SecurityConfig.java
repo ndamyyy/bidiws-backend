@@ -1,5 +1,6 @@
 package com.bidiws.security;
 
+import com.bidiws.exception.ApiError;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,7 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -82,14 +82,12 @@ public class SecurityConfig {
     }
 
     private void writeError(HttpServletResponse response, String path, int status, String message) throws java.io.IOException {
+
         response.setStatus(status);
         response.setContentType("application/json");
-        Map<String, Object> body = Map.of(
-                "status", status,
-                "message", message,
-                "timestamp", Instant.now().toString(),
-                "path", path
-        );
+
+        ApiError body = new ApiError(status, message, Instant.now().toString(), path);
+
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 
