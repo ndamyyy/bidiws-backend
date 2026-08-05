@@ -6,6 +6,8 @@ import com.bidiws.entity.Arret;
 import com.bidiws.entity.Notification;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Utilisateur;
+import com.bidiws.enums.CanalNotification;
+import com.bidiws.enums.TypeNotification;
 import com.bidiws.event.NotificationCreeeEvent;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.NotificationRepository;
@@ -32,22 +34,30 @@ public class NotificationService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public NotificationResponseDto create(NotificationRequestDto dto) {
+    public Notification creerNotification(
+            Long destinataireId,
+            Long arretId,
+            Long residenceId,
+            TypeNotification type,
+            String titre,
+            String message,
+            CanalNotification canal
+    ) {
 
-        Utilisateur destinataire = utilisateurRepository.findById(dto.destinataireId())
+        Utilisateur destinataire = utilisateurRepository.findById(destinataireId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Destinataire introuvable"));
 
-        Arret arret = resoudreArret(dto.arretId());
-        Residence residence = resoudreResidence(dto.residenceId());
+        Arret arret = resoudreArret(arretId);
+        Residence residence = resoudreResidence(residenceId);
 
         Notification notification = Notification.builder()
                 .destinataire(destinataire)
                 .arret(arret)
                 .residence(residence)
-                .type(dto.type())
-                .titre(dto.titre())
-                .message(dto.message())
-                .canal(dto.canal() != null ? dto.canal() : com.bidiws.enums.CanalNotification.PUSH)
+                .type(type)
+                .titre(titre)
+                .message(message)
+                .canal(canal != null ? canal : CanalNotification.PUSH)
                 .lu(false)
                 .envoye(false)
                 .build();
@@ -59,7 +69,23 @@ public class NotificationService {
                 saved.getDestinataire().getId()
         ));
 
-        return toResponseDto(saved);
+        return saved;
+    }
+
+    @Transactional
+    public NotificationResponseDto create(NotificationRequestDto dto) {
+
+        Notification notification = creerNotification(
+                dto.destinataireId(),
+                dto.arretId(),
+                dto.residenceId(),
+                dto.type(),
+                dto.titre(),
+                dto.message(),
+                dto.canal()
+        );
+
+        return toResponseDto(notification);
     }
 
     @Transactional

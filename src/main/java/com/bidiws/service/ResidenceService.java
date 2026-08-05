@@ -2,9 +2,7 @@ package com.bidiws.service;
 
 import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.dto.residence.ResidenceResponseDto;
-import com.bidiws.entity.Residence;
-import com.bidiws.entity.Ville;
-import com.bidiws.entity.Zone;
+import com.bidiws.entity.*;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.VilleRepository;
 import com.bidiws.repository.ZoneRepository;
@@ -108,6 +106,20 @@ public class ResidenceService {
         return toResponseDto(residence);
     }
 
+    @Transactional(readOnly = true)
+    public List<Utilisateur> getGardiens(Long residenceId) {
+
+        Residence residence = residenceRepository.findById(residenceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Résidence introuvable"));
+
+        return residence.getGardiens()
+                .stream()
+                .map(ResidenceGardien::getGardien)
+                .toList();
+    }
+
     public List<ResidenceResponseDto> getByVille(Long villeId) {
         return residenceRepository.findByVilleId(villeId).stream()
                 .map(this::toResponseDto)
@@ -134,13 +146,6 @@ public class ResidenceService {
         residenceRepository.save(residence);
     }
 
-    private Zone resoudreZone(Long zoneId) {
-        if (zoneId == null) {
-            return null;
-        }
-        return zoneRepository.findById(zoneId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Zone introuvable"));
-    }
 
     private ResidenceResponseDto toResponseDto(Residence r) {
         return new ResidenceResponseDto(
