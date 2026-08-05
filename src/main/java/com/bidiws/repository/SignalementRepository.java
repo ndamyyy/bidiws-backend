@@ -25,4 +25,6 @@ public interface SignalementRepository extends JpaRepository<Signalement,Long> {
 
     boolean existsByIdAndAuteurId(Long id, Long auteurId);
 
+    boolean existsByIdAndResidence_Gardiens_Gardien_Id(Long id, Long gardienId);
+
 }

@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class UtilisateurService {
@@ -73,6 +75,46 @@ public class UtilisateurService {
                 .actif(true)
                 .build();
 
+        return toResponseDto(utilisateurRepository.save(utilisateur));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UtilisateurResponseDto> rechercher(String nom, String prenom, Role role) {
+
+        List<Utilisateur> resultats;
+
+        if (nom != null || prenom != null) {
+            resultats = utilisateurRepository.findByNomContainingIgnoreCaseOrPrenomContainingIgnoreCase(
+                    nom != null ? nom : "", prenom != null ? prenom : "");
+        } else if (role != null) {
+            resultats = utilisateurRepository.findByRole(role);
+        } else {
+            resultats = utilisateurRepository.findAll();
+        }
+
+        return resultats.stream().map(this::toResponseDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UtilisateurResponseDto getById(Long id) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        return toResponseDto(utilisateur);
+    }
+
+    @Transactional
+    public void setActif(Long id, boolean actif) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        utilisateur.setActif(actif);
+        utilisateurRepository.save(utilisateur);
+    }
+
+    @Transactional
+    public UtilisateurResponseDto changerRole(Long id, Role role) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        utilisateur.setRole(role);
         return toResponseDto(utilisateurRepository.save(utilisateur));
     }
 

@@ -33,14 +33,19 @@ public class AuthorizationService {
     }
 
     public boolean canAccessSignalement(Long signalementId, Authentication authentication) {
-        if (hasAnyAuthority(authentication, "ROLE_ADMIN", "ROLE_MAIRIE", "ROLE_GARDIEN")) {
+        if (hasAnyAuthority(authentication, "ROLE_ADMIN", "ROLE_MAIRIE")) {
             return true;
         }
         if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
             return false;
         }
-
-        return signalementRepository.existsByIdAndAuteurId(signalementId, userDetails.getId());
+        if (signalementRepository.existsByIdAndAuteurId(signalementId, userDetails.getId())) {
+            return true;
+        }
+        // Un gardien ne peut consulter que les signalements des residences
+        // qu'il garde reellement, pas n'importe lequel.
+        return hasAuthority(authentication, "ROLE_GARDIEN")
+                && signalementRepository.existsByIdAndResidence_Gardiens_Gardien_Id(signalementId, userDetails.getId());
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {
