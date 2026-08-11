@@ -45,6 +45,7 @@ public class ArretController {
         return ResponseEntity.ok(arretService.signalerIncident(id, dto));
     }
 
+
     @GetMapping("/{id}")
     public ResponseEntity<ArretResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(arretService.getById(id));
@@ -56,6 +57,9 @@ public class ArretController {
     }
 
     @GetMapping("/residence/{residenceId}")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isSyndicOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isGardienOfResidence(#residenceId, authentication)")
     public ResponseEntity<List<ArretResponseDto>> getByResidence(@PathVariable Long residenceId) {
         return ResponseEntity.ok(arretService.getByResidence(residenceId));
     }

@@ -71,4 +71,12 @@ public class AdminUserController {
     ) {
         return ResponseEntity.ok(utilisateurService.changerRole(id, role));
     }
+
+    @PatchMapping("/{id}/ville")
+    public ResponseEntity<UtilisateurResponseDto> changerVille(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long villeId
+    ) {
+        return ResponseEntity.ok(utilisateurService.changerVille(id, villeId));
+    }
 }

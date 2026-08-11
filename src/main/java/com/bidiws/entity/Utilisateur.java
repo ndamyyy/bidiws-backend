@@ -40,5 +40,10 @@ public class Utilisateur extends Auditable{
         @Builder.Default
         private Boolean actif = true;
 
+        // Rattachement utilise uniquement pour le role MAIRIE : delimite la
+        // ville dont cette mairie peut voir/gerer les residences.
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(name = "ville_id")
+        private Ville ville;
 
 }

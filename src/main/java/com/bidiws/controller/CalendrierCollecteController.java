@@ -40,6 +40,9 @@ public class CalendrierCollecteController {
     }
 
     @GetMapping("/residence/{residenceId}")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isSyndicOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isGardienOfResidence(#residenceId, authentication)")
     public ResponseEntity<List<CalendrierCollecteResponseDto>> getByResidence(@PathVariable Long residenceId) {
         return ResponseEntity.ok(calendrierCollecteService.getByResidence(residenceId));
     }
