@@ -116,6 +116,12 @@ public class NotificationService {
         return toResponseDto(notificationRepository.save(notification));
     }
 
+    public NotificationResponseDto getById(Long id) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification introuvable"));
+        return toResponseDto(notification);
+    }
+
     public List<NotificationResponseDto> getByDestinataire(Long destinataireId) {
         return notificationRepository.findByDestinataireIdOrderByCreatedAtDesc(destinataireId).stream()
                 .map(this::toResponseDto)

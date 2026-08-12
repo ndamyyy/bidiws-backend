@@ -1,0 +1,152 @@
+package com.bidiws.security;
+
+import com.bidiws.entity.Arret;
+import com.bidiws.entity.Residence;
+import com.bidiws.entity.Utilisateur;
+import com.bidiws.entity.Ville;
+import com.bidiws.enums.Role;
+import com.bidiws.repository.ArretRepository;
+import com.bidiws.repository.ResidenceGardienRepository;
+import com.bidiws.repository.ResidenceRepository;
+import com.bidiws.repository.ResidenceSyndicRepository;
+import com.bidiws.repository.SignalementRepository;
+import com.bidiws.repository.TourneeRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+/**
+ * Verifie le scoping des abonnements STOMP par tournee (canAccessTournee) :
+ * un abonne a /topic/tournees/{id}(/position) ne doit y acceder que s'il a
+ * un rattachement reel a une residence touchee par cette tournee, meme
+ * regle d'isolation que le reste de la classe (cf. isSyndicOfResidence,
+ * isMairieOfResidence).
+ */
+@ExtendWith(MockitoExtension.class)
+class AuthorizationServiceTest {
+
+    @Mock
+    private TourneeRepository tourneeRepository;
+    @Mock
+    private ArretRepository arretRepository;
+    @Mock
+    private SignalementRepository signalementRepository;
+    @Mock
+    private ResidenceGardienRepository residenceGardienRepository;
+    @Mock
+    private ResidenceSyndicRepository residenceSyndicRepository;
+    @Mock
+    private ResidenceRepository residenceRepository;
+
+    @InjectMocks
+    private AuthorizationService authorizationService;
+
+    private static final Long TOURNEE_ID = 100L;
+    private static final Long RESIDENCE_ID = 1L;
+    private static final Long VILLE_A_ID = 10L;
+    private static final Long VILLE_B_ID = 20L;
+
+    private Authentication authentification(Long id, Role role, Long villeId) {
+        Utilisateur.UtilisateurBuilder builder = Utilisateur.builder()
+                .id(id)
+                .email("user" + id + "@bidiws.com")
+                .motDePasse("hash")
+                .role(role)
+                .actif(true);
+        if (villeId != null) {
+            builder.ville(Ville.builder().id(villeId).build());
+        }
+        CustomUserDetails userDetails = new CustomUserDetails(builder.build());
+        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+    }
+
+    private Arret arretPourResidenceDansVille(Long villeId) {
+        Residence residence = Residence.builder()
+                .id(RESIDENCE_ID)
+                .ville(Ville.builder().id(villeId).build())
+                .build();
+        return Arret.builder().residence(residence).build();
+    }
+
+    @Test
+    void adminAccedeAToutesLesTournees() {
+        Authentication admin = authentification(1L, Role.ADMIN, null);
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, admin)).isTrue();
+    }
+
+    @Test
+    void leChauffeurAssigneAccedeALaTournee() {
+        Authentication chauffeur = authentification(2L, Role.CHAUFFEUR, null);
+        when(tourneeRepository.existsByIdAndChauffeurId(TOURNEE_ID, 2L)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, chauffeur)).isTrue();
+    }
+
+    @Test
+    void unChauffeurNonAssigneNaPasAcces() {
+        Authentication chauffeur = authentification(2L, Role.CHAUFFEUR, null);
+        when(tourneeRepository.existsByIdAndChauffeurId(TOURNEE_ID, 2L)).thenReturn(false);
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, chauffeur)).isFalse();
+    }
+
+    @Test
+    void unSyndicDeLaResidenceConcerneeAAcces() {
+        Authentication syndic = authentification(3L, Role.SYNDIC, null);
+        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceSyndicRepository.existsByResidenceIdAndSyndicId(RESIDENCE_ID, 3L)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, syndic)).isTrue();
+    }
+
+    @Test
+    void unSyndicDuneAutreResidenceNaPasAcces() {
+        Authentication syndic = authentification(3L, Role.SYNDIC, null);
+        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceSyndicRepository.existsByResidenceIdAndSyndicId(RESIDENCE_ID, 3L)).thenReturn(false);
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, syndic)).isFalse();
+    }
+
+    @Test
+    void uneMairieDeLaVilleConcerneeAAcces() {
+        Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_A_ID);
+        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairie)).isTrue();
+    }
+
+    @Test
+    void uneMairieDuneAutreVilleNaPasAcces() {
+        Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_B_ID);
+        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairie)).isFalse();
+    }
+
+    @Test
+    void uneMairieSansVilleRattacheeNaAccesAAucuneTournee() {
+        Authentication mairieSansVille = authentification(4L, Role.MAIRIE, null);
+        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairieSansVille)).isFalse();
+    }
+
+    @Test
+    void aucunArretPourLaTourneeRefuseLAccesAuxRolesNonAdmin() {
+        Authentication syndic = authentification(3L, Role.SYNDIC, null);
+        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of());
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, syndic)).isFalse();
+    }
+}
