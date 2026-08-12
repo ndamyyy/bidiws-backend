@@ -9,5 +9,6 @@ public record UtilisateurResponseDto(
         String prenom,
         String telephone,
         Role role,
-        Boolean actif
+        Boolean actif,
+        Long villeId
 ){}

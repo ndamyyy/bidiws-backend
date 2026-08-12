@@ -17,5 +17,7 @@ public interface ResidenceGardienRepository extends JpaRepository<ResidenceGardi
 
     Optional<ResidenceGardien> findByResidenceIdAndPrincipalTrue(Long residenceId);
 
+    boolean existsByResidenceIdAndGardienId(Long residenceId, Long gardienId);
+
     void deleteByResidenceIdAndGardienId(Long residenceId, Long gardienId);
 }

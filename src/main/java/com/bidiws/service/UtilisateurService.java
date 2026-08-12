@@ -2,8 +2,10 @@ package com.bidiws.service;
 
 import com.bidiws.dto.utilisateur.*;
 import com.bidiws.entity.Utilisateur;
+import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.UtilisateurRepository;
+import com.bidiws.repository.VilleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -11,11 +13,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class UtilisateurService {
 
     private final UtilisateurRepository utilisateurRepository;
+    private final VilleRepository villeRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
@@ -76,6 +81,69 @@ public class UtilisateurService {
         return toResponseDto(utilisateurRepository.save(utilisateur));
     }
 
+    @Transactional(readOnly = true)
+    public List<UtilisateurResponseDto> rechercher(String nom, String prenom, Role role) {
+
+        List<Utilisateur> resultats;
+
+        if (nom != null || prenom != null) {
+            resultats = utilisateurRepository.findByNomContainingIgnoreCaseOrPrenomContainingIgnoreCase(
+                    nom != null ? nom : "", prenom != null ? prenom : "");
+        } else if (role != null) {
+            resultats = utilisateurRepository.findByRole(role);
+        } else {
+            resultats = utilisateurRepository.findAll();
+        }
+
+        return resultats.stream().map(this::toResponseDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UtilisateurResponseDto getById(Long id) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        return toResponseDto(utilisateur);
+    }
+
+    @Transactional
+    public void setActif(Long id, boolean actif) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        utilisateur.setActif(actif);
+        utilisateurRepository.save(utilisateur);
+    }
+
+    @Transactional
+    public UtilisateurResponseDto changerRole(Long id, Role role) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        utilisateur.setRole(role);
+        return toResponseDto(utilisateurRepository.save(utilisateur));
+    }
+
+    // Rattache un compte MAIRIE a la ville dont il pourra voir/gerer les
+    // residences. villeId == null retire le rattachement.
+    @Transactional
+    public UtilisateurResponseDto changerVille(Long id, Long villeId) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+
+        if (utilisateur.getRole() != Role.MAIRIE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Le rattachement à une ville n'est possible que pour un compte MAIRIE");
+        }
+
+        if (villeId == null) {
+            utilisateur.setVille(null);
+        } else {
+            Ville ville = villeRepository.findById(villeId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ville introuvable"));
+            utilisateur.setVille(ville);
+        }
+
+        return toResponseDto(utilisateurRepository.save(utilisateur));
+    }
+
     @Transactional
     public void resetMotDePasseByAdmin(Long id, ResetPasswordRequestDto dto) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
@@ -107,7 +175,8 @@ public class UtilisateurService {
                 u.getPrenom(),
                 u.getTelephone(),
                 u.getRole(),
-                u.getActif()
+                u.getActif(),
+                u.getVille() != null ? u.getVille().getId() : null
         );
     }
 }

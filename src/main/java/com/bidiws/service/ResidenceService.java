@@ -2,12 +2,14 @@ package com.bidiws.service;
 
 import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.dto.residence.ResidenceResponseDto;
-import com.bidiws.entity.Residence;
-import com.bidiws.entity.Ville;
-import com.bidiws.entity.Zone;
+import com.bidiws.entity.*;
+import com.bidiws.enums.Role;
+import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
+import com.bidiws.repository.ResidenceSyndicRepository;
 import com.bidiws.repository.VilleRepository;
 import com.bidiws.repository.ZoneRepository;
+import com.bidiws.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,9 +25,17 @@ public class ResidenceService {
     private final ResidenceRepository residenceRepository;
     private final VilleRepository villeRepository;
     private final ZoneRepository zoneRepository;
+    private final ResidenceGardienRepository residenceGardienRepository;
+    private final ResidenceSyndicRepository residenceSyndicRepository;
 
     @Transactional
-    public ResidenceResponseDto create(ResidenceRequestDto dto) {
+    public ResidenceResponseDto create(ResidenceRequestDto dto, CustomUserDetails userDetails) {
+
+        if (userDetails.getRole() == Role.MAIRIE
+                && (userDetails.getVilleId() == null || !userDetails.getVilleId().equals(dto.villeId()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Vous ne pouvez créer une résidence que dans votre propre ville");
+        }
 
         Ville ville = villeRepository.findById(dto.villeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ville introuvable"));
@@ -55,10 +65,12 @@ public class ResidenceService {
     }
 
     @Transactional
-    public ResidenceResponseDto update(Long id, ResidenceRequestDto dto) {
+    public ResidenceResponseDto update(Long id, ResidenceRequestDto dto, CustomUserDetails userDetails) {
 
         Residence residence = residenceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
+
+        verifierAccesEcriture(residence, dto.villeId(), userDetails);
 
         Ville ville = villeRepository.findById(dto.villeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ville introuvable"));
@@ -87,6 +99,29 @@ public class ResidenceService {
         return toResponseDto(residenceRepository.save(residence));
     }
 
+    // ADMIN : illimite. MAIRIE : uniquement sa propre ville (et ne peut pas
+    // faire basculer la residence vers une autre ville). SYNDIC : uniquement
+    // les residences qu'il gere, sans restriction de ville.
+    private void verifierAccesEcriture(Residence residence, Long villeIdCible, CustomUserDetails userDetails) {
+        switch (userDetails.getRole()) {
+            case ADMIN -> { }
+            case MAIRIE -> {
+                if (userDetails.getVilleId() == null
+                        || !residence.getVille().getId().equals(userDetails.getVilleId())
+                        || !villeIdCible.equals(userDetails.getVilleId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "Vous ne pouvez modifier que les résidences de votre ville");
+                }
+            }
+            case SYNDIC -> {
+                if (!residenceSyndicRepository.existsByResidenceIdAndSyndicId(residence.getId(), userDetails.getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vous ne gérez pas cette résidence");
+                }
+            }
+            default -> throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
+        }
+    }
+
     private Zone resoudreZone(Long zoneId, Long villeId) {
         if (zoneId == null) {
             return null;
@@ -102,45 +137,84 @@ public class ResidenceService {
         return zone;
     }
 
-    public ResidenceResponseDto getById(Long id) {
+    public ResidenceResponseDto getById(Long id, CustomUserDetails userDetails) {
         Residence residence = residenceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
+        verifierAccesLecture(residence, userDetails);
         return toResponseDto(residence);
     }
 
-    public List<ResidenceResponseDto> getByVille(Long villeId) {
-        return residenceRepository.findByVilleId(villeId).stream()
-                .map(this::toResponseDto)
+    private void verifierAccesLecture(Residence residence, CustomUserDetails userDetails) {
+        boolean autorise = switch (userDetails.getRole()) {
+            case ADMIN -> true;
+            case MAIRIE -> userDetails.getVilleId() != null
+                    && residence.getVille().getId().equals(userDetails.getVilleId());
+            case SYNDIC -> residenceSyndicRepository.existsByResidenceIdAndSyndicId(residence.getId(), userDetails.getId());
+            case GARDIEN -> residenceGardienRepository.existsByResidenceIdAndGardienId(residence.getId(), userDetails.getId());
+            default -> false;
+        };
+        if (!autorise) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé à cette résidence");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Utilisateur> getGardiens(Long residenceId) {
+
+        Residence residence = residenceRepository.findById(residenceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Résidence introuvable"));
+
+        return residence.getGardiens()
+                .stream()
+                .map(ResidenceGardien::getGardien)
                 .toList();
     }
 
-    public List<ResidenceResponseDto> getByZone(Long zoneId) {
-        return residenceRepository.findByZoneId(zoneId).stream()
-                .map(this::toResponseDto)
-                .toList();
-    }
+    // Base scopee par role, puis affinee par les filtres optionnels
+    // villeId/zoneId (utiles surtout pour ADMIN, qui n'a pas de scope de base).
+    public List<ResidenceResponseDto> getAll(CustomUserDetails userDetails, Long villeId, Long zoneId) {
 
-    public List<ResidenceResponseDto> getAll() {
-        return residenceRepository.findAll().stream()
+        List<Residence> base = switch (userDetails.getRole()) {
+            case ADMIN -> residenceRepository.findAll();
+            case MAIRIE -> userDetails.getVilleId() != null
+                    ? residenceRepository.findByVilleId(userDetails.getVilleId())
+                    : List.of();
+            case SYNDIC -> residenceSyndicRepository.findBySyndicId(userDetails.getId()).stream()
+                    .map(ResidenceSyndic::getResidence)
+                    .toList();
+            case GARDIEN -> residenceGardienRepository.findByGardienId(userDetails.getId()).stream()
+                    .map(ResidenceGardien::getResidence)
+                    .toList();
+            default -> List.of();
+        };
+
+        return base.stream()
+                .filter(r -> villeId == null || r.getVille().getId().equals(villeId))
+                .filter(r -> zoneId == null || (r.getZone() != null && r.getZone().getId().equals(zoneId)))
                 .map(this::toResponseDto)
                 .toList();
     }
 
     @Transactional
-    public void desactiver(Long id) {
+    public void desactiver(Long id, CustomUserDetails userDetails) {
         Residence residence = residenceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
+
+        boolean autorise = userDetails.getRole() == Role.ADMIN
+                || (userDetails.getRole() == Role.MAIRIE
+                        && userDetails.getVilleId() != null
+                        && residence.getVille().getId().equals(userDetails.getVilleId()));
+
+        if (!autorise) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
+        }
+
         residence.setActif(false);
         residenceRepository.save(residence);
     }
 
-    private Zone resoudreZone(Long zoneId) {
-        if (zoneId == null) {
-            return null;
-        }
-        return zoneRepository.findById(zoneId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Zone introuvable"));
-    }
 
     private ResidenceResponseDto toResponseDto(Residence r) {
         return new ResidenceResponseDto(

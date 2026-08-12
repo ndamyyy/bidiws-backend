@@ -2,12 +2,14 @@ package com.bidiws.controller;
 
 import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.dto.residence.ResidenceResponseDto;
+import com.bidiws.security.CustomUserDetails;
 import com.bidiws.service.ResidenceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,42 +23,49 @@ public class ResidenceController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
-    public ResponseEntity<ResidenceResponseDto> create(@Valid @RequestBody ResidenceRequestDto dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(residenceService.create(dto));
+    public ResponseEntity<ResidenceResponseDto> create(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody ResidenceRequestDto dto
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(residenceService.create(dto, userDetails));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'SYNDIC')")
     public ResponseEntity<ResidenceResponseDto> update(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable long id,
             @Valid @RequestBody ResidenceRequestDto dto
     ) {
-        return ResponseEntity.ok(residenceService.update(id, dto));
+        return ResponseEntity.ok(residenceService.update(id, dto, userDetails));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ResidenceResponseDto> getById(@PathVariable long id) {
-        return ResponseEntity.ok(residenceService.getById(id));
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'SYNDIC', 'GARDIEN')")
+    public ResponseEntity<ResidenceResponseDto> getById(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable long id
+    ) {
+        return ResponseEntity.ok(residenceService.getById(id, userDetails));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'SYNDIC', 'GARDIEN')")
     public ResponseEntity<List<ResidenceResponseDto>> getAll(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam(required = false) Long villeId,
             @RequestParam(required = false) Long zoneId
     ) {
-        if (villeId != null) {
-            return ResponseEntity.ok(residenceService.getByVille(villeId));
-        }
-        if (zoneId != null) {
-            return ResponseEntity.ok(residenceService.getByZone(zoneId));
-        }
-        return ResponseEntity.ok(residenceService.getAll());
+        return ResponseEntity.ok(residenceService.getAll(userDetails, villeId, zoneId));
     }
 
     @PatchMapping("/{id}/desactiver")
     @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
-    public ResponseEntity<Void> desactiver(@PathVariable Long id) {
-        residenceService.desactiver(id);
+    public ResponseEntity<Void> desactiver(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id
+    ) {
+        residenceService.desactiver(id, userDetails);
         return ResponseEntity.noContent().build();
     }
 }

@@ -6,13 +6,12 @@ import com.bidiws.dto.arret.ArretResponseDto;
 import com.bidiws.entity.Arret;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
+import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
-import com.bidiws.event.ArretStatutChangeEvent;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.TourneeRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +26,7 @@ public class ArretService {
     private final ArretRepository arretRepository;
     private final TourneeRepository tourneeRepository;
     private final ResidenceRepository residenceRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ArretDetectionService arretDetectionService;
 
     @Transactional
     public ArretResponseDto creer(ArretRequestDto dto) {
@@ -52,49 +51,22 @@ public class ArretService {
 
     @Transactional
     public ArretResponseDto changerStatut(Long id, StatutArret nouveauStatut) {
+        // Toute modification provenant de cette API REST est considérée
+        // comme une validation humaine.
+        // Les futures détections GPS, RFID ou CAPTEUR_BENNE utiliseront
+        // également ArretDetectionService mais avec un autre ModeDetection.
 
-        Arret arret = arretRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable"));
-
-        StatutArret ancienStatut = arret.getStatut();
-        arret.setStatut(nouveauStatut);
-
-        Arret saved = arretRepository.save(arret);
-
-        eventPublisher.publishEvent(new ArretStatutChangeEvent(
-                saved.getId(),
-                saved.getTournee().getId(),
-                saved.getResidence().getId(),
-                ancienStatut,
-                nouveauStatut
-        ));
-
+        Arret saved = arretDetectionService.appliquerDetection(
+                id, nouveauStatut, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100
+        );
         return toResponseDto(saved);
     }
 
     @Transactional
     public ArretResponseDto signalerIncident(Long id, ArretIncidentRequestDto dto) {
-
-        Arret arret = arretRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable"));
-
-        StatutArret ancienStatut = arret.getStatut();
-
-        arret.setIncident(true);
-        arret.setDescriptionIncident(dto.descriptionIncident());
-        arret.setPhotoIncidentUrl(dto.photoIncidentUrl());
-        arret.setStatut(StatutArret.INCIDENT);
-
-        Arret saved = arretRepository.save(arret);
-
-        eventPublisher.publishEvent(new ArretStatutChangeEvent(
-                saved.getId(),
-                saved.getTournee().getId(),
-                saved.getResidence().getId(),
-                ancienStatut,
-                StatutArret.INCIDENT
-        ));
-
+        Arret saved = arretDetectionService.signalerIncident(
+                id, dto.descriptionIncident(), dto.photoIncidentUrl()
+        );
         return toResponseDto(saved);
     }
 
