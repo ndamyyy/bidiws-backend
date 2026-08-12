@@ -86,6 +86,18 @@ public class SignalementService {
                 .toList();
     }
 
+    public List<SignalementResponseDto> getByStatutPourGardien(StatutSignalement statut, Long gardienId) {
+        return signalementRepository.findByStatutAndResidence_Gardiens_Gardien_IdOrderByCreatedAtAsc(statut, gardienId).stream()
+                .map(this::toResponseDto)
+                .toList();
+    }
+
+    public List<SignalementResponseDto> getByStatutPourMairie(StatutSignalement statut, Long villeId) {
+        return signalementRepository.findByStatutAndResidence_Ville_IdOrderByCreatedAtAsc(statut, villeId).stream()
+                .map(this::toResponseDto)
+                .toList();
+    }
+
     private Residence resoudreResidence(Long residenceId) {
         if (residenceId == null) {
             return null;

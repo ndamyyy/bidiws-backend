@@ -35,11 +35,13 @@ public class ChauffeurCamionController {
     }
 
     @GetMapping("/chauffeur/{chauffeurId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isSelf(#chauffeurId, authentication)")
     public ResponseEntity<List<ChauffeurCamionResponseDto>> getByChauffeur(@PathVariable Long chauffeurId) {
         return ResponseEntity.ok(chauffeurCamionService.getByChauffeur(chauffeurId));
     }
 
     @GetMapping("/camion/{camionId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<List<ChauffeurCamionResponseDto>> getByCamion(@PathVariable Long camionId) {
         return ResponseEntity.ok(chauffeurCamionService.getByCamion(camionId));
     }

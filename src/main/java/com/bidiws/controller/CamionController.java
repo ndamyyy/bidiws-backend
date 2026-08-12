@@ -35,11 +35,13 @@ public class CamionController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<CamionResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(camionService.getById(id));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
     public ResponseEntity<List<CamionResponseDto>> getAll(
             @RequestParam(required = false) Boolean actif
     ) {

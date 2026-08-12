@@ -1,11 +1,13 @@
 package com.bidiws.security;
 
 import com.bidiws.entity.Arret;
+import com.bidiws.entity.CalendrierCollecte;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.ArretRepository;
+import com.bidiws.repository.CalendrierCollecteRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -20,6 +22,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -46,11 +49,16 @@ class AuthorizationServiceTest {
     private ResidenceSyndicRepository residenceSyndicRepository;
     @Mock
     private ResidenceRepository residenceRepository;
+    @Mock
+    private CalendrierCollecteRepository calendrierCollecteRepository;
 
     @InjectMocks
     private AuthorizationService authorizationService;
 
     private static final Long TOURNEE_ID = 100L;
+    private static final Long ARRET_ID = 200L;
+    private static final Long CALENDRIER_ID = 300L;
+    private static final Long SIGNALEMENT_ID = 400L;
     private static final Long RESIDENCE_ID = 1L;
     private static final Long VILLE_A_ID = 10L;
     private static final Long VILLE_B_ID = 20L;
@@ -75,6 +83,11 @@ class AuthorizationServiceTest {
                 .ville(Ville.builder().id(villeId).build())
                 .build();
         return Arret.builder().residence(residence).build();
+    }
+
+    private CalendrierCollecte calendrierPourResidence() {
+        Residence residence = Residence.builder().id(RESIDENCE_ID).build();
+        return CalendrierCollecte.builder().id(CALENDRIER_ID).residence(residence).build();
     }
 
     @Test
@@ -148,5 +161,88 @@ class AuthorizationServiceTest {
         when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of());
 
         assertThat(authorizationService.canAccessTournee(TOURNEE_ID, syndic)).isFalse();
+    }
+
+    // ── canAccessArret ─────────────────────────────────────────────
+
+    @Test
+    void unGardienDeLaResidenceDeLArretAAcces() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(arretRepository.findById(ARRET_ID)).thenReturn(Optional.of(arretPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceGardienRepository.existsByResidenceIdAndGardienId(RESIDENCE_ID, 5L)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessArret(ARRET_ID, gardien)).isTrue();
+    }
+
+    @Test
+    void unGardienDuneAutreResidenceNaPasAccesALArret() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(arretRepository.findById(ARRET_ID)).thenReturn(Optional.of(arretPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceGardienRepository.existsByResidenceIdAndGardienId(RESIDENCE_ID, 5L)).thenReturn(false);
+
+        assertThat(authorizationService.canAccessArret(ARRET_ID, gardien)).isFalse();
+    }
+
+    @Test
+    void unChauffeurAssigneALArretAAcces() {
+        Authentication chauffeur = authentification(6L, Role.CHAUFFEUR, null);
+        when(arretRepository.existsByIdAndTourneeChauffeurId(ARRET_ID, 6L)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessArret(ARRET_ID, chauffeur)).isTrue();
+    }
+
+    @Test
+    void unHabitantNaJamaisAccesADirectementAUnArret() {
+        Authentication habitant = authentification(7L, Role.HABITANT, null);
+        when(arretRepository.findById(ARRET_ID)).thenReturn(Optional.of(arretPourResidenceDansVille(VILLE_A_ID)));
+
+        assertThat(authorizationService.canAccessArret(ARRET_ID, habitant)).isFalse();
+    }
+
+    // ── canAccessCalendrier ────────────────────────────────────────
+
+    @Test
+    void unSyndicDeLaResidenceDuCalendrierAAcces() {
+        Authentication syndic = authentification(3L, Role.SYNDIC, null);
+        when(calendrierCollecteRepository.findById(CALENDRIER_ID)).thenReturn(Optional.of(calendrierPourResidence()));
+        when(residenceSyndicRepository.existsByResidenceIdAndSyndicId(RESIDENCE_ID, 3L)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessCalendrier(CALENDRIER_ID, syndic)).isTrue();
+    }
+
+    @Test
+    void unSyndicDuneAutreResidenceNaPasAccesAuCalendrier() {
+        Authentication syndic = authentification(3L, Role.SYNDIC, null);
+        when(calendrierCollecteRepository.findById(CALENDRIER_ID)).thenReturn(Optional.of(calendrierPourResidence()));
+        when(residenceSyndicRepository.existsByResidenceIdAndSyndicId(RESIDENCE_ID, 3L)).thenReturn(false);
+
+        assertThat(authorizationService.canAccessCalendrier(CALENDRIER_ID, syndic)).isFalse();
+    }
+
+    // ── canModerateSignalement ─────────────────────────────────────
+
+    @Test
+    void unGardienDeLaResidenceDuSignalementPeutLeModerer() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(signalementRepository.existsByIdAndResidence_Gardiens_Gardien_Id(SIGNALEMENT_ID, 5L)).thenReturn(true);
+
+        assertThat(authorizationService.canModerateSignalement(SIGNALEMENT_ID, gardien)).isTrue();
+    }
+
+    @Test
+    void unGardienDuneAutreResidenceNePeutPasModererLeSignalement() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(signalementRepository.existsByIdAndResidence_Gardiens_Gardien_Id(SIGNALEMENT_ID, 5L)).thenReturn(false);
+
+        assertThat(authorizationService.canModerateSignalement(SIGNALEMENT_ID, gardien)).isFalse();
+    }
+
+    @Test
+    void lAuteurDuSignalementNePeutPasLeModererSansRattachement() {
+        // Contrairement a canAccessSignalement, pas de bypass "c'est le mien" :
+        // un habitant qui a cree le signalement ne peut pas en changer le statut.
+        Authentication habitant = authentification(8L, Role.HABITANT, null);
+
+        assertThat(authorizationService.canModerateSignalement(SIGNALEMENT_ID, habitant)).isFalse();
     }
 }

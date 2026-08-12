@@ -46,11 +46,14 @@ public class TourneeController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@authorizationService.canAccessTournee(#id, authentication)")
     public ResponseEntity<TourneeResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(tourneeService.getById(id));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') " +
+            "or (#chauffeurId != null and @authorizationService.isSelf(#chauffeurId, authentication))")
     public ResponseEntity<List<TourneeResponseDto>> getAll(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Long chauffeurId

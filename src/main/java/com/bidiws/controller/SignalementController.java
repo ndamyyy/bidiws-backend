@@ -2,6 +2,7 @@ package com.bidiws.controller;
 
 import com.bidiws.dto.signalement.SignalementRequestDto;
 import com.bidiws.dto.signalement.SignalementResponseDto;
+import com.bidiws.enums.Role;
 import com.bidiws.enums.StatutSignalement;
 import com.bidiws.security.CustomUserDetails;
 import com.bidiws.service.SignalementService;
@@ -33,7 +34,7 @@ public class SignalementController {
     }
 
     @PatchMapping("/{id}/statut")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'GARDIEN')")
+    @PreAuthorize("@authorizationService.canModerateSignalement(#id, authentication)")
     public ResponseEntity<SignalementResponseDto> changerStatut(
             @PathVariable Long id,
             @RequestParam StatutSignalement statut
@@ -62,7 +63,19 @@ public class SignalementController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE', 'GARDIEN')")
-    public ResponseEntity<List<SignalementResponseDto>> getByStatut(@RequestParam StatutSignalement statut) {
+    public ResponseEntity<List<SignalementResponseDto>> getByStatut(
+            @RequestParam StatutSignalement statut,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        if (userDetails.getRole() == Role.GARDIEN) {
+            return ResponseEntity.ok(signalementService.getByStatutPourGardien(statut, userDetails.getId()));
+        }
+        if (userDetails.getRole() == Role.MAIRIE) {
+            if (userDetails.getVilleId() == null) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Aucune ville rattachée");
+            }
+            return ResponseEntity.ok(signalementService.getByStatutPourMairie(statut, userDetails.getVilleId()));
+        }
         return ResponseEntity.ok(signalementService.getByStatut(statut));
     }
 }
