@@ -1,5 +1,6 @@
 package com.bidiws.security;
 
+import com.bidiws.entity.Arret;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
@@ -9,6 +10,8 @@ import com.bidiws.repository.TourneeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component("authorizationService")
 @RequiredArgsConstructor
@@ -85,6 +88,41 @@ public class AuthorizationService {
                 && hasAuthority(authentication, "ROLE_MAIRIE")
                 && userDetails.getVilleId() != null
                 && residenceRepository.existsByIdAndVilleId(residenceId, userDetails.getVilleId());
+    }
+
+    // Utilisee pour scoper les abonnements STOMP /topic/tournees/{id}(/position) :
+    // un abonne ne doit recevoir que les tournees qui touchent une residence
+    // avec laquelle il a un rattachement reel (meme regle que le reste de la classe).
+    public boolean canAccessTournee(Long tourneeId, Authentication authentication) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
+            return false;
+        }
+        if (hasAuthority(authentication, "ROLE_CHAUFFEUR")) {
+            return tourneeRepository.existsByIdAndChauffeurId(tourneeId, userDetails.getId());
+        }
+
+        List<Arret> arrets = arretRepository.findByTourneeId(tourneeId);
+        if (arrets.isEmpty()) {
+            return false;
+        }
+
+        if (hasAuthority(authentication, "ROLE_GARDIEN")) {
+            return arrets.stream().anyMatch(a ->
+                    residenceGardienRepository.existsByResidenceIdAndGardienId(a.getResidence().getId(), userDetails.getId()));
+        }
+        if (hasAuthority(authentication, "ROLE_SYNDIC")) {
+            return arrets.stream().anyMatch(a ->
+                    residenceSyndicRepository.existsByResidenceIdAndSyndicId(a.getResidence().getId(), userDetails.getId()));
+        }
+        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
+            Long villeId = userDetails.getVilleId();
+            return villeId != null && arrets.stream().anyMatch(a ->
+                    a.getResidence().getVille() != null && villeId.equals(a.getResidence().getVille().getId()));
+        }
+        return false;
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {
