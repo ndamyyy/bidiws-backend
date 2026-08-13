@@ -10,13 +10,14 @@ import com.bidiws.repository.SignalGpsRepository;
 import com.bidiws.repository.TourneeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -63,16 +64,14 @@ public class SignalGpsService {
                         "Aucun signal GPS pour cette tournée"));
     }
 
-    public List<SignalGpsResponseDto> getTrajet(Long tourneeId) {
-        return signalGpsRepository.findByTourneeIdOrderByHorodatageAsc(tourneeId).stream()
-                .map(this::toResponseDto)
-                .toList();
+    public Page<SignalGpsResponseDto> getTrajet(Long tourneeId, Pageable pageable) {
+        return signalGpsRepository.findByTourneeIdOrderByHorodatageAsc(tourneeId, pageable)
+                .map(this::toResponseDto);
     }
 
-    public List<SignalGpsResponseDto> getEntreDates(Long tourneeId, LocalDateTime debut, LocalDateTime fin) {
-        return signalGpsRepository.findByTourneeIdAndHorodatageBetween(tourneeId, debut, fin).stream()
-                .map(this::toResponseDto)
-                .toList();
+    public Page<SignalGpsResponseDto> getEntreDates(Long tourneeId, LocalDateTime debut, LocalDateTime fin, Pageable pageable) {
+        return signalGpsRepository.findByTourneeIdAndHorodatageBetweenOrderByHorodatageAsc(tourneeId, debut, fin, pageable)
+                .map(this::toResponseDto);
     }
 
     private SignalGpsResponseDto toResponseDto(SignalGps s) {
