@@ -6,6 +6,7 @@ import com.bidiws.entity.Camion;
 import com.bidiws.entity.Tournee;
 import com.bidiws.entity.TypeCollecte;
 import com.bidiws.entity.Utilisateur;
+import com.bidiws.entity.Ville;
 import com.bidiws.entity.Zone;
 import com.bidiws.enums.Role;
 import com.bidiws.enums.StatutTournee;
@@ -14,6 +15,7 @@ import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.TypeCollecteRepository;
 import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.repository.ZoneRepository;
+import com.bidiws.security.CustomUserDetails;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -51,6 +53,9 @@ class TourneeServiceTest {
     private static final Long TYPE_COLLECTE_ID = 2L;
     private static final Long CAMION_ID = 3L;
     private static final Long CHAUFFEUR_ID = 4L;
+    private static final Long VILLE_A_ID = 10L;
+    private static final Long VILLE_B_ID = 20L;
+    private static final Long ZONE_ID = 30L;
 
     private TypeCollecte typeCollecte() {
         return TypeCollecte.builder().id(TYPE_COLLECTE_ID).code("OM").libelle("Ordures ménagères").build();
@@ -73,6 +78,26 @@ class TourneeServiceTest {
                 .chauffeur(chauffeurActif())
                 .statut(statut)
                 .build();
+    }
+
+    private Tournee tourneeDansZoneDeVille(Long villeId) {
+        Zone zone = Zone.builder().id(ZONE_ID).ville(Ville.builder().id(villeId).build()).build();
+        Tournee t = tournee(StatutTournee.PLANIFIEE);
+        t.setZone(zone);
+        return t;
+    }
+
+    private CustomUserDetails utilisateur(Long id, Role role, Long villeId) {
+        Utilisateur.UtilisateurBuilder builder = Utilisateur.builder()
+                .id(id)
+                .email("user" + id + "@bidiws.com")
+                .motDePasse("hash")
+                .role(role)
+                .actif(true);
+        if (villeId != null) {
+            builder.ville(Ville.builder().id(villeId).build());
+        }
+        return new CustomUserDetails(builder.build());
     }
 
     private TourneeRequestDto dto() {
@@ -200,24 +225,59 @@ class TourneeServiceTest {
     }
 
     @Test
-    void getByDateRetourneLaListe() {
+    void getByDateRetourneLaListePourAdmin() {
         LocalDate date = LocalDate.of(2026, 8, 1);
         when(tourneeRepository.findByDateTournee(date)).thenReturn(List.of(tournee(StatutTournee.PLANIFIEE)));
 
-        assertThat(tourneeService.getByDate(date)).hasSize(1);
+        assertThat(tourneeService.getByDate(date, utilisateur(1L, Role.ADMIN, null))).hasSize(1);
     }
 
     @Test
-    void getByChauffeurRetourneLaListe() {
+    void getByChauffeurRetourneLaListePourAdmin() {
         when(tourneeRepository.findByChauffeurId(CHAUFFEUR_ID)).thenReturn(List.of(tournee(StatutTournee.PLANIFIEE)));
 
-        assertThat(tourneeService.getByChauffeur(CHAUFFEUR_ID)).hasSize(1);
+        assertThat(tourneeService.getByChauffeur(CHAUFFEUR_ID, utilisateur(1L, Role.ADMIN, null))).hasSize(1);
     }
 
     @Test
-    void getAllRetourneToutesLesTournees() {
+    void getAllRetourneToutesLesTourneesPourAdmin() {
         when(tourneeRepository.findAll()).thenReturn(List.of(tournee(StatutTournee.PLANIFIEE), tournee(StatutTournee.TERMINEE)));
 
-        assertThat(tourneeService.getAll()).hasSize(2);
+        assertThat(tourneeService.getAll(utilisateur(1L, Role.ADMIN, null))).hasSize(2);
+    }
+
+    @Test
+    void getAllPourUnChauffeurNestPasFiltreParVille() {
+        // Le controller a deja verifie isSelf(chauffeurId) avant d'arriver ici ;
+        // le chauffeur voit toutes ses propres tournees, quelle que soit leur zone.
+        when(tourneeRepository.findByChauffeurId(CHAUFFEUR_ID))
+                .thenReturn(List.of(tourneeDansZoneDeVille(VILLE_A_ID), tourneeDansZoneDeVille(VILLE_B_ID)));
+
+        assertThat(tourneeService.getByChauffeur(CHAUFFEUR_ID, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null))).hasSize(2);
+    }
+
+    @Test
+    void uneMairieNeVoitQueLesTourneesDeSaVille() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(
+                tourneeDansZoneDeVille(VILLE_A_ID), tourneeDansZoneDeVille(VILLE_B_ID)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(1L, Role.MAIRIE, VILLE_A_ID));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).zoneId()).isEqualTo(ZONE_ID);
+    }
+
+    @Test
+    void uneMairieNeVoitPasLesTourneesSansZone() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(tournee(StatutTournee.PLANIFIEE)));
+
+        assertThat(tourneeService.getAll(utilisateur(1L, Role.MAIRIE, VILLE_A_ID))).isEmpty();
+    }
+
+    @Test
+    void uneMairieSansVilleRattacheeNeVoitAucuneTournee() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeDansZoneDeVille(VILLE_A_ID)));
+
+        assertThat(tourneeService.getAll(utilisateur(1L, Role.MAIRIE, null))).isEmpty();
     }
 }

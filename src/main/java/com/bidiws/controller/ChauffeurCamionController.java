@@ -20,13 +20,13 @@ public class ChauffeurCamionController {
     private final ChauffeurCamionService chauffeurCamionService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.canAccessCamion(#dto.camionId(), authentication)")
     public ResponseEntity<ChauffeurCamionResponseDto> affecter(@Valid @RequestBody ChauffeurCamionRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(chauffeurCamionService.affecter(dto));
     }
 
     @PatchMapping("/terminer")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.canAccessCamion(#camionId, authentication)")
     public ResponseEntity<ChauffeurCamionResponseDto> terminer(
             @RequestParam Long chauffeurId,
             @RequestParam Long camionId
@@ -41,7 +41,7 @@ public class ChauffeurCamionController {
     }
 
     @GetMapping("/camion/{camionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.canAccessCamion(#camionId, authentication)")
     public ResponseEntity<List<ChauffeurCamionResponseDto>> getByCamion(@PathVariable Long camionId) {
         return ResponseEntity.ok(chauffeurCamionService.getByCamion(camionId));
     }

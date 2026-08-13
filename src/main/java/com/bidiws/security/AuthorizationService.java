@@ -4,6 +4,7 @@ import com.bidiws.entity.Arret;
 import com.bidiws.entity.CalendrierCollecte;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CalendrierCollecteRepository;
+import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -27,6 +28,7 @@ public class AuthorizationService {
     private final ResidenceSyndicRepository residenceSyndicRepository;
     private final ResidenceRepository residenceRepository;
     private final CalendrierCollecteRepository calendrierCollecteRepository;
+    private final CamionRepository camionRepository;
 
     public boolean isAssignedChauffeur(Long tourneeId, Authentication authentication) {
         if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)
@@ -209,6 +211,21 @@ public class AuthorizationService {
                     && residenceRepository.existsByIdAndVilleId(residenceId, userDetails.getVilleId());
         }
         return false;
+    }
+
+    // Un camion appartient a une ville (utilisateur.ville_id pour la mairie qui
+    // le gere) : meme regle fail-closed que le reste de la classe, pour eviter
+    // qu'une mairie voie/gere la flotte d'une autre ville.
+    public boolean canAccessCamion(Long camionId, Authentication authentication) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)
+                || !hasAuthority(authentication, "ROLE_MAIRIE")) {
+            return false;
+        }
+        return userDetails.getVilleId() != null
+                && camionRepository.existsByIdAndVilleId(camionId, userDetails.getVilleId());
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

@@ -6,6 +6,7 @@ import com.bidiws.entity.*;
 import com.bidiws.enums.StatutTournee;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.*;
+import com.bidiws.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -116,21 +117,38 @@ public class TourneeService {
         return toResponseDto(tournee);
     }
 
-    public List<TourneeResponseDto> getByDate(LocalDate date) {
-        return tourneeRepository.findByDateTournee(date).stream()
+    public List<TourneeResponseDto> getByDate(LocalDate date, CustomUserDetails userDetails) {
+        return filtrerParVille(tourneeRepository.findByDateTournee(date), userDetails).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
 
-    public List<TourneeResponseDto> getByChauffeur(Long chauffeurId) {
-        return tourneeRepository.findByChauffeurId(chauffeurId).stream()
+    public List<TourneeResponseDto> getByChauffeur(Long chauffeurId, CustomUserDetails userDetails) {
+        return filtrerParVille(tourneeRepository.findByChauffeurId(chauffeurId), userDetails).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
 
-    public List<TourneeResponseDto> getAll() {
-        return tourneeRepository.findAll().stream()
+    public List<TourneeResponseDto> getAll(CustomUserDetails userDetails) {
+        return filtrerParVille(tourneeRepository.findAll(), userDetails).stream()
                 .map(this::toResponseDto)
+                .toList();
+    }
+
+    // Ne restreint que pour MAIRIE (fail-closed si pas de ville rattachee) : une
+    // tournee sans zone n'a pas de ville determinable, donc reste invisible. ADMIN
+    // et un chauffeur consultant ses propres tournees (deja verifie par
+    // @PreAuthorize cote controller) passent sans filtre supplementaire.
+    private List<Tournee> filtrerParVille(List<Tournee> tournees, CustomUserDetails userDetails) {
+        if (userDetails.getRole() != Role.MAIRIE) {
+            return tournees;
+        }
+        if (userDetails.getVilleId() == null) {
+            return List.of();
+        }
+        return tournees.stream()
+                .filter(t -> t.getZone() != null && t.getZone().getVille() != null
+                        && t.getZone().getVille().getId().equals(userDetails.getVilleId()))
                 .toList();
     }
 

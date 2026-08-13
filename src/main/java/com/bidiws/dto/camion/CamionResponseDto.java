@@ -10,5 +10,7 @@ public record CamionResponseDto(
         BigDecimal capaciteTonnes,
         boolean gpsActif,
         boolean capteurBenne,
-        Boolean actif
+        Boolean actif,
+        Long villeId,
+        String villeNom
 ) {}
