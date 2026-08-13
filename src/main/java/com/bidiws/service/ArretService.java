@@ -34,6 +34,7 @@ public class ArretService {
     private final ConteneurRepository conteneurRepository;
     private final ArretConteneurRepository arretConteneurRepository;
     private final ArretDetectionService arretDetectionService;
+    private final ArretConteneurDetectionService arretConteneurDetectionService;
 
     @Transactional
     public ArretResponseDto creer(ArretRequestDto dto) {
@@ -88,7 +89,26 @@ public class ArretService {
         Arret saved = arretDetectionService.appliquerDetection(
                 id, nouveauStatut, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100
         );
+
+        cascaderVersConteneurs(id, nouveauStatut);
+
         return toResponseDto(saved);
+    }
+
+    // Une validation manuelle du chauffeur doit se refleter sur le detail par
+    // bac (GET /arrets/{id}/conteneurs), sinon un gardien y verrait "0/4
+    // confirmes" alors que la collecte est faite. Reutilise
+    // ArretConteneurDetectionService (pas de logique de transition dupliquee) :
+    // son idempotence gere deja sans risque le cas d'un conteneur deja
+    // confirme par un capteur (no-op silencieux, transitionAutorisee s'en
+    // charge). Residence sans conteneurs enregistres : liste vide, rien a
+    // faire (retrocompatibilite).
+    private void cascaderVersConteneurs(Long arretId, StatutArret nouveauStatut) {
+        List<ArretConteneur> lignes = arretConteneurRepository.findByArretId(arretId);
+        for (ArretConteneur ligne : lignes) {
+            arretConteneurDetectionService.appliquerDetection(
+                    arretId, ligne.getConteneur().getId(), nouveauStatut, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100);
+        }
     }
 
     @Transactional

@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -50,6 +51,8 @@ class ArretServiceTest {
     private ArretConteneurRepository arretConteneurRepository;
     @Mock
     private ArretDetectionService arretDetectionService;
+    @Mock
+    private ArretConteneurDetectionService arretConteneurDetectionService;
 
     @InjectMocks
     private ArretService arretService;
@@ -168,6 +171,60 @@ class ArretServiceTest {
         assertThat(result.id()).isEqualTo(ARRET_ID);
         verify(arretDetectionService).appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE,
                 ModeDetection.VALIDATION_CHAUFFEUR, (short) 100);
+    }
+
+    @Test
+    void changerStatutCascadeVersTousLesArretConteneur() {
+        Conteneur c1 = Conteneur.builder().id(101L).code("023").build();
+        Conteneur c2 = Conteneur.builder().id(102L).code("024").build();
+        ArretConteneur ligne1 = ArretConteneur.builder().id(1L).conteneur(c1).statut(StatutArret.EN_ATTENTE).build();
+        ArretConteneur ligne2 = ArretConteneur.builder().id(2L).conteneur(c2).statut(StatutArret.EN_ATTENTE).build();
+        when(arretDetectionService.appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE,
+                ModeDetection.VALIDATION_CHAUFFEUR, (short) 100)).thenReturn(arret());
+        when(arretConteneurRepository.findByArretId(ARRET_ID)).thenReturn(List.of(ligne1, ligne2));
+
+        arretService.changerStatut(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE);
+
+        verify(arretConteneurDetectionService).appliquerDetection(
+                ARRET_ID, 101L, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100);
+        verify(arretConteneurDetectionService).appliquerDetection(
+                ARRET_ID, 102L, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100);
+    }
+
+    @Test
+    void changerStatutNeCascadePasSiLaResidenceNaAucunConteneurEnregistre() {
+        when(arretDetectionService.appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE,
+                ModeDetection.VALIDATION_CHAUFFEUR, (short) 100)).thenReturn(arret());
+        when(arretConteneurRepository.findByArretId(ARRET_ID)).thenReturn(List.of());
+
+        ArretResponseDto result = arretService.changerStatut(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE);
+
+        assertThat(result.id()).isEqualTo(ARRET_ID);
+        verify(arretConteneurDetectionService, never()).appliquerDetection(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void changerStatutCascadeSansExceptionMemeSiUnConteneurEstDejaConfirmeParCapteur() {
+        // ArretConteneurDetectionService gere lui-meme l'idempotence (deja
+        // teste dans ArretConteneurDetectionServiceTest) : ArretService n'a
+        // pas besoin de filtrer les lignes deja confirmees, il delegue tout.
+        Conteneur dejaConfirme = Conteneur.builder().id(101L).code("023").build();
+        Conteneur enAttente = Conteneur.builder().id(102L).code("024").build();
+        ArretConteneur ligneDejaConfirmee = ArretConteneur.builder().id(1L).conteneur(dejaConfirme)
+                .statut(StatutArret.COLLECTE_CONFIRMEE).modeDetection(ModeDetection.CAPTEUR_BENNE).build();
+        ArretConteneur ligneEnAttente = ArretConteneur.builder().id(2L).conteneur(enAttente)
+                .statut(StatutArret.EN_ATTENTE).build();
+        when(arretDetectionService.appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE,
+                ModeDetection.VALIDATION_CHAUFFEUR, (short) 100)).thenReturn(arret());
+        when(arretConteneurRepository.findByArretId(ARRET_ID)).thenReturn(List.of(ligneDejaConfirmee, ligneEnAttente));
+
+        assertThatCode(() -> arretService.changerStatut(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE))
+                .doesNotThrowAnyException();
+
+        verify(arretConteneurDetectionService).appliquerDetection(
+                ARRET_ID, 101L, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100);
+        verify(arretConteneurDetectionService).appliquerDetection(
+                ARRET_ID, 102L, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.VALIDATION_CHAUFFEUR, (short) 100);
     }
 
     @Test
