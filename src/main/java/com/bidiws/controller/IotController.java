@@ -2,6 +2,7 @@ package com.bidiws.controller;
 
 import com.bidiws.dto.iot.DetectionIotRequestDto;
 import com.bidiws.dto.iot.DetectionIotResponseDto;
+import com.bidiws.dto.iot.MesureRemplissageRequestDto;
 import com.bidiws.entity.AppareilIot;
 import com.bidiws.service.IotDetectionService;
 import jakarta.validation.Valid;
@@ -27,5 +28,16 @@ public class IotController {
             @Valid @RequestBody DetectionIotRequestDto dto
     ) {
         return ResponseEntity.ok(iotDetectionService.enregistrerDetection(appareil, dto));
+    }
+
+    // Mesure continue (niveau de remplissage) : ne touche a aucun statut
+    // d'arret, juste l'etat courant du bac.
+    @PostMapping("/mesures-remplissage")
+    public ResponseEntity<Void> enregistrerMesureRemplissage(
+            @AuthenticationPrincipal AppareilIot appareil,
+            @Valid @RequestBody MesureRemplissageRequestDto dto
+    ) {
+        iotDetectionService.enregistrerMesureRemplissage(appareil, dto);
+        return ResponseEntity.noContent().build();
     }
 }

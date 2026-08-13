@@ -3,6 +3,8 @@ package com.bidiws.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "conteneur")
 @Getter
@@ -32,4 +34,13 @@ public class Conteneur {
     @Column(name = "actif")
     @Builder.Default
     private Boolean actif = true;
+
+    // Mesure continue (POST /iot/mesures-remplissage), independante de tout
+    // statut d'arret : un bac peut etre a 80% de remplissage sans qu'aucune
+    // collecte ne soit en cours.
+    @Column(name = "niveau_remplissage_pct")
+    private Short niveauRemplissagePct;
+
+    @Column(name = "derniere_mesure_remplissage")
+    private LocalDateTime derniereMesureRemplissage;
 }

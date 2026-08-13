@@ -1,5 +1,6 @@
 package com.bidiws.controller;
 
+import com.bidiws.dto.arret.ArretConteneurResponseDto;
 import com.bidiws.dto.arret.ArretIncidentRequestDto;
 import com.bidiws.dto.arret.ArretRequestDto;
 import com.bidiws.dto.arret.ArretResponseDto;
@@ -50,6 +51,12 @@ public class ArretController {
     @PreAuthorize("@authorizationService.canAccessArret(#id, authentication)")
     public ResponseEntity<ArretResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(arretService.getById(id));
+    }
+
+    @GetMapping("/{id}/conteneurs")
+    @PreAuthorize("@authorizationService.canAccessArret(#id, authentication)")
+    public ResponseEntity<List<ArretConteneurResponseDto>> getConteneurs(@PathVariable Long id) {
+        return ResponseEntity.ok(arretService.getConteneurs(id));
     }
 
     @GetMapping("/tournee/{tourneeId}")

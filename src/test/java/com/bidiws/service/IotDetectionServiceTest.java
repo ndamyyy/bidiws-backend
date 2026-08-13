@@ -2,6 +2,7 @@ package com.bidiws.service;
 
 import com.bidiws.dto.iot.DetectionIotRequestDto;
 import com.bidiws.dto.iot.DetectionIotResponseDto;
+import com.bidiws.dto.iot.MesureRemplissageRequestDto;
 import com.bidiws.entity.AppareilIot;
 import com.bidiws.entity.Arret;
 import com.bidiws.entity.Camion;
@@ -26,15 +27,14 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Verifie que la detection IoT passe bien par le point d'entree unique
- * ArretDetectionService.appliquerDetection (pas de logique de transition
- * dupliquee), et resout correctement le conteneur selon le scenario
- * materiel (capteur embarque vs lecteur RFID sur camion).
+ * Verifie que la detection IoT passe par ArretConteneurDetectionService
+ * (suivi par bac individuel, pas directement par ArretDetectionService),
+ * et resout correctement le conteneur selon le scenario materiel (capteur
+ * embarque vs lecteur RFID sur camion).
  */
 @ExtendWith(MockitoExtension.class)
 class IotDetectionServiceTest {
@@ -44,7 +44,7 @@ class IotDetectionServiceTest {
     @Mock
     private ConteneurRepository conteneurRepository;
     @Mock
-    private ArretDetectionService arretDetectionService;
+    private ArretConteneurDetectionService arretConteneurDetectionService;
 
     @InjectMocks
     private IotDetectionService iotDetectionService;
@@ -87,13 +87,14 @@ class IotDetectionServiceTest {
         DetectionIotRequestDto dto = new DetectionIotRequestDto(LocalDateTime.now(), null);
         when(arretRepository.findByResidenceIdAndTournee_DateTournee(RESIDENCE_ID, LocalDate.now()))
                 .thenReturn(List.of(arret(StatutArret.EN_ATTENTE)));
-        when(arretDetectionService.appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.CAPTEUR_BENNE, (short) 90))
-                .thenReturn(arret(StatutArret.COLLECTE_CONFIRMEE));
+        when(arretRepository.findById(ARRET_ID)).thenReturn(Optional.of(arret(StatutArret.COLLECTE_CONFIRMEE)));
 
         DetectionIotResponseDto result = iotDetectionService.enregistrerDetection(capteurEmbarque(), dto);
 
         assertThat(result.arretId()).isEqualTo(ARRET_ID);
         assertThat(result.statut()).isEqualTo(StatutArret.COLLECTE_CONFIRMEE);
+        verify(arretConteneurDetectionService).appliquerDetection(
+                ARRET_ID, CONTENEUR_ID, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.CAPTEUR_BENNE, (short) 90);
     }
 
     @Test
@@ -111,13 +112,13 @@ class IotDetectionServiceTest {
         when(conteneurRepository.findByRfidTag("TAG-023")).thenReturn(Optional.of(conteneurActif()));
         when(arretRepository.findByResidenceIdAndTournee_DateTournee(RESIDENCE_ID, LocalDate.now()))
                 .thenReturn(List.of(arret(StatutArret.EN_ATTENTE)));
-        when(arretDetectionService.appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.RFID, (short) 90))
-                .thenReturn(arret(StatutArret.COLLECTE_CONFIRMEE));
+        when(arretRepository.findById(ARRET_ID)).thenReturn(Optional.of(arret(StatutArret.COLLECTE_CONFIRMEE)));
 
         DetectionIotResponseDto result = iotDetectionService.enregistrerDetection(lecteurSurCamion(), dto);
 
         assertThat(result.arretId()).isEqualTo(ARRET_ID);
-        verify(arretDetectionService).appliquerDetection(ARRET_ID, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.RFID, (short) 90);
+        verify(arretConteneurDetectionService).appliquerDetection(
+                ARRET_ID, CONTENEUR_ID, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.RFID, (short) 90);
     }
 
     @Test
@@ -168,11 +169,34 @@ class IotDetectionServiceTest {
         DetectionIotRequestDto dto = new DetectionIotRequestDto(LocalDateTime.now(), null);
         when(arretRepository.findByResidenceIdAndTournee_DateTournee(RESIDENCE_ID, LocalDate.now()))
                 .thenReturn(List.of(dejaConfirme, enAttente));
-        when(arretDetectionService.appliquerDetection(eq(99L), eq(StatutArret.COLLECTE_CONFIRMEE), eq(ModeDetection.CAPTEUR_BENNE), eq((short) 90)))
-                .thenReturn(enAttente);
+        when(arretRepository.findById(99L)).thenReturn(Optional.of(enAttente));
 
         iotDetectionService.enregistrerDetection(capteurEmbarque(), dto);
 
-        verify(arretDetectionService).appliquerDetection(99L, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.CAPTEUR_BENNE, (short) 90);
+        verify(arretConteneurDetectionService).appliquerDetection(
+                99L, CONTENEUR_ID, StatutArret.COLLECTE_CONFIRMEE, ModeDetection.CAPTEUR_BENNE, (short) 90);
+    }
+
+    @Test
+    void enregistrerMesureRemplissageEchoueSiAppareilSansConteneur() {
+        AppareilIot lecteur = lecteurSurCamion();
+
+        assertThatThrownBy(() -> iotDetectionService.enregistrerMesureRemplissage(
+                lecteur, new MesureRemplissageRequestDto(75, LocalDateTime.now())))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("n'est rattaché à aucun conteneur");
+    }
+
+    @Test
+    void enregistrerMesureRemplissageMetAJourLeConteneur() {
+        Conteneur conteneur = conteneurActif();
+        AppareilIot appareil = AppareilIot.builder().id(APPAREIL_ID).typeAppareil(TypeAppareilIot.CAPTEUR_BENNE).conteneur(conteneur).build();
+        LocalDateTime horodatage = LocalDateTime.now();
+
+        iotDetectionService.enregistrerMesureRemplissage(appareil, new MesureRemplissageRequestDto(75, horodatage));
+
+        assertThat(conteneur.getNiveauRemplissagePct()).isEqualTo((short) 75);
+        assertThat(conteneur.getDerniereMesureRemplissage()).isEqualTo(horodatage);
+        verify(conteneurRepository).save(conteneur);
     }
 }

@@ -12,6 +12,8 @@ public interface ConteneurRepository extends JpaRepository<Conteneur, Long> {
 
     List<Conteneur> findByResidenceId(Long residenceId);
 
+    List<Conteneur> findByResidenceIdAndActifTrue(Long residenceId);
+
     Optional<Conteneur> findByRfidTag(String rfidTag);
 
     boolean existsByResidenceIdAndCode(Long residenceId, String code);

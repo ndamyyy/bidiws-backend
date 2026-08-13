@@ -2,6 +2,7 @@ package com.bidiws.service;
 
 import com.bidiws.dto.iot.DetectionIotRequestDto;
 import com.bidiws.dto.iot.DetectionIotResponseDto;
+import com.bidiws.dto.iot.MesureRemplissageRequestDto;
 import com.bidiws.entity.AppareilIot;
 import com.bidiws.entity.Arret;
 import com.bidiws.entity.Conteneur;
@@ -21,10 +22,10 @@ import java.util.List;
 
 /**
  * Traduit une detection materielle (capteur colle a un bac, lecteur RFID
- * sur un camion) en transition d'Arret, en passant par le meme point
- * d'entree unique que toute autre source (ArretDetectionService) : rien
- * dans la chaine notification/WebSocket n'a besoin de savoir que la
- * detection vient d'un appareil IoT plutot que d'une validation chauffeur.
+ * sur un camion) en transition, en passant par ArretConteneurDetectionService
+ * (suivi par bac individuel — cf. migration V6) plutot que directement par
+ * ArretDetectionService : une residence a plusieurs conteneurs, le premier
+ * capteur qui se declenche ne doit confirmer QUE son bac, pas tout l'arret.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,7 +38,7 @@ public class IotDetectionService {
 
     private final ArretRepository arretRepository;
     private final ConteneurRepository conteneurRepository;
-    private final ArretDetectionService arretDetectionService;
+    private final ArretConteneurDetectionService arretConteneurDetectionService;
 
     @Transactional
     public DetectionIotResponseDto enregistrerDetection(AppareilIot appareil, DetectionIotRequestDto dto) {
@@ -54,10 +55,28 @@ public class IotDetectionService {
                 ? ModeDetection.RFID
                 : ModeDetection.CAPTEUR_BENNE;
 
-        Arret miseAJour = arretDetectionService.appliquerDetection(
-                arret.getId(), StatutArret.COLLECTE_CONFIRMEE, mode, SCORE_CONFIANCE_IOT);
+        arretConteneurDetectionService.appliquerDetection(
+                arret.getId(), conteneur.getId(), StatutArret.COLLECTE_CONFIRMEE, mode, SCORE_CONFIANCE_IOT);
+
+        // Reference explicitement l'Arret a jour : sa propre confirmation
+        // (si tous les conteneurs viennent d'etre confirmes) a pu se
+        // produire a l'instant dans l'appel ci-dessus.
+        Arret miseAJour = arretRepository.findById(arret.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable"));
 
         return new DetectionIotResponseDto(miseAJour.getId(), miseAJour.getStatut(), dto.horodatage());
+    }
+
+    @Transactional
+    public void enregistrerMesureRemplissage(AppareilIot appareil, MesureRemplissageRequestDto dto) {
+        Conteneur conteneur = appareil.getConteneur();
+        if (conteneur == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cet appareil n'est rattaché à aucun conteneur");
+        }
+
+        conteneur.setNiveauRemplissagePct(dto.niveauPct().shortValue());
+        conteneur.setDerniereMesureRemplissage(dto.horodatage());
+        conteneurRepository.save(conteneur);
     }
 
     // Scenario capteur embarque : le conteneur est directement connu (pas
