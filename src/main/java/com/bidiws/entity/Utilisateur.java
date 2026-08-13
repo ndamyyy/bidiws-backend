@@ -4,6 +4,8 @@ import com.bidiws.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name= "utilisateur")
 @Getter
@@ -45,5 +47,15 @@ public class Utilisateur extends Auditable{
         @ManyToOne(fetch = FetchType.LAZY)
         @JoinColumn(name = "ville_id")
         private Ville ville;
+
+        // Verrouillage de compte apres echecs de connexion successifs
+        // (cf. AuthService). Defaut coherent aussi cote Java, pas seulement
+        // la contrainte SQL DEFAULT 0.
+        @Column(name = "tentatives_echouees", nullable = false)
+        @Builder.Default
+        private Short tentativesEchouees = 0;
+
+        @Column(name = "verrouille_jusqua")
+        private LocalDateTime verrouilleJusqua;
 
 }
