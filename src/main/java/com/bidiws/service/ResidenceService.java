@@ -172,6 +172,20 @@ public class ResidenceService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<Utilisateur> getHabitants(Long residenceId) {
+
+        Residence residence = residenceRepository.findById(residenceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Résidence introuvable"));
+
+        return residence.getHabitants()
+                .stream()
+                .map(ResidenceHabitant::getHabitant)
+                .toList();
+    }
+
     // Base scopee par role, puis affinee par les filtres optionnels
     // villeId/zoneId (utiles surtout pour ADMIN, qui n'a pas de scope de base).
     public List<ResidenceResponseDto> getAll(CustomUserDetails userDetails, Long villeId, Long zoneId) {

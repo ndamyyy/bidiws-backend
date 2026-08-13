@@ -52,5 +52,24 @@ public class ArretEventListener {
                         gardien.getId(), event.arretId(), ex);
             }
         }
+
+        var habitants = residenceService.getHabitants(event.residenceId());
+
+        for (var habitant : habitants) {
+            try {
+                notificationService.creerNotification(
+                        habitant.getId(),
+                        event.arretId(),
+                        event.residenceId(),
+                        TypeNotification.COLLECTE_CONFIRMEE,
+                        "Collecte terminée",
+                        "Les conteneurs peuvent maintenant être rentrés.",
+                        CanalNotification.PUSH
+                );
+            } catch (Exception ex) {
+                log.error("Échec de la notification à l'habitant {} pour l'arrêt {}",
+                        habitant.getId(), event.arretId(), ex);
+            }
+        }
     }
 }

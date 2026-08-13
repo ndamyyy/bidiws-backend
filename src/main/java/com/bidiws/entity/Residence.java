@@ -69,6 +69,10 @@ public class Residence extends CreatedAtEntity {
     @Builder.Default
     private List<ResidenceSyndic> syndics = new ArrayList<>();
 
+    @OneToMany(mappedBy = "residence", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<ResidenceHabitant> habitants = new ArrayList<>();
+
     public void ajouterGardien(ResidenceGardien rg) {
         gardiens.add(rg);
         rg.setResidence(this);
