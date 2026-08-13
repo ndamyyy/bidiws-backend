@@ -1,14 +1,19 @@
 package com.bidiws.service;
 
+import com.bidiws.dto.arret.ArretConteneurResponseDto;
 import com.bidiws.dto.arret.ArretIncidentRequestDto;
 import com.bidiws.dto.arret.ArretRequestDto;
 import com.bidiws.dto.arret.ArretResponseDto;
 import com.bidiws.entity.Arret;
+import com.bidiws.entity.ArretConteneur;
+import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ArretRepository;
+import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.TourneeRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +31,8 @@ public class ArretService {
     private final ArretRepository arretRepository;
     private final TourneeRepository tourneeRepository;
     private final ResidenceRepository residenceRepository;
+    private final ConteneurRepository conteneurRepository;
+    private final ArretConteneurRepository arretConteneurRepository;
     private final ArretDetectionService arretDetectionService;
 
     @Transactional
@@ -46,7 +53,29 @@ public class ArretService {
                 .typesConteneurs(dto.typesConteneurs())
                 .build();
 
-        return toResponseDto(arretRepository.save(arret));
+        Arret saved = arretRepository.save(arret);
+
+        genererDetailParConteneur(saved, dto.residenceId());
+
+        return toResponseDto(saved);
+    }
+
+    // Une ligne ArretConteneur EN_ATTENTE par conteneur actif de la residence,
+    // pour qu'IotDetectionService puisse suivre chaque bac individuellement
+    // (cf. ArretConteneurDetectionService). Residence sans conteneur enregistre :
+    // aucune ligne creee, comportement inchange — l'Arret seul fait foi,
+    // retrocompatibilite totale.
+    private void genererDetailParConteneur(Arret arret, Long residenceId) {
+        List<Conteneur> conteneurs = conteneurRepository.findByResidenceIdAndActifTrue(residenceId);
+
+        for (Conteneur conteneur : conteneurs) {
+            ArretConteneur ligne = ArretConteneur.builder()
+                    .arret(arret)
+                    .conteneur(conteneur)
+                    .statut(StatutArret.EN_ATTENTE)
+                    .build();
+            arretConteneurRepository.save(ligne);
+        }
     }
 
     @Transactional
@@ -88,6 +117,19 @@ public class ArretService {
                 .toList();
     }
 
+    // Detail par bac (statut individuel + niveau de remplissage) : permet a
+    // un gardien de voir "3/4 confirmes, reste le bac #4" plutot que le seul
+    // statut agrege de l'Arret. Liste vide pour une residence sans conteneurs
+    // enregistres (comportement attendu, pas une erreur).
+    public List<ArretConteneurResponseDto> getConteneurs(Long arretId) {
+        if (!arretRepository.existsById(arretId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable");
+        }
+        return arretConteneurRepository.findByArretId(arretId).stream()
+                .map(this::toConteneurResponseDto)
+                .toList();
+    }
+
     private ArretResponseDto toResponseDto(Arret a) {
         return new ArretResponseDto(
                 a.getId(),
@@ -107,6 +149,20 @@ public class ArretService {
                 a.getIncident(),
                 a.getDescriptionIncident(),
                 a.getPhotoIncidentUrl()
+        );
+    }
+
+    private ArretConteneurResponseDto toConteneurResponseDto(ArretConteneur ac) {
+        Conteneur c = ac.getConteneur();
+        return new ArretConteneurResponseDto(
+                ac.getId(),
+                c.getId(),
+                c.getCode(),
+                ac.getStatut(),
+                ac.getModeDetection(),
+                ac.getScoreConfiance() != null ? ac.getScoreConfiance().intValue() : null,
+                ac.getHorodatageConfirmation(),
+                c.getNiveauRemplissagePct() != null ? c.getNiveauRemplissagePct().intValue() : null
         );
     }
 }

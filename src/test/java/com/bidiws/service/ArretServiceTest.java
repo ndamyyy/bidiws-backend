@@ -1,18 +1,24 @@
 package com.bidiws.service;
 
+import com.bidiws.dto.arret.ArretConteneurResponseDto;
 import com.bidiws.dto.arret.ArretIncidentRequestDto;
 import com.bidiws.dto.arret.ArretRequestDto;
 import com.bidiws.dto.arret.ArretResponseDto;
 import com.bidiws.entity.Arret;
+import com.bidiws.entity.ArretConteneur;
+import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ArretRepository;
+import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.TourneeRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +30,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +44,10 @@ class ArretServiceTest {
     private TourneeRepository tourneeRepository;
     @Mock
     private ResidenceRepository residenceRepository;
+    @Mock
+    private ConteneurRepository conteneurRepository;
+    @Mock
+    private ArretConteneurRepository arretConteneurRepository;
     @Mock
     private ArretDetectionService arretDetectionService;
 
@@ -95,12 +107,55 @@ class ArretServiceTest {
             a.setId(ARRET_ID);
             return a;
         });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of());
 
         ArretResponseDto result = arretService.creer(dto);
 
         assertThat(result.id()).isEqualTo(ARRET_ID);
         assertThat(result.statut()).isEqualTo(StatutArret.EN_ATTENTE);
         assertThat(result.ordre()).isEqualTo(2);
+    }
+
+    @Test
+    void creerNeGenereAucuneLigneArretConteneurSiLaResidenceNaAucunConteneur() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee()));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence()));
+        when(arretRepository.save(any(Arret.class))).thenAnswer(inv -> {
+            Arret a = inv.getArgument(0);
+            a.setId(ARRET_ID);
+            return a;
+        });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of());
+
+        arretService.creer(dto);
+
+        verify(arretConteneurRepository, never()).save(any(ArretConteneur.class));
+    }
+
+    @Test
+    void creerGenereUneLigneArretConteneurEnAttentePourChaqueConteneurActifDeLaResidence() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        Conteneur c1 = Conteneur.builder().id(101L).code("023").residence(residence()).actif(true).build();
+        Conteneur c2 = Conteneur.builder().id(102L).code("024").residence(residence()).actif(true).build();
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee()));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence()));
+        when(arretRepository.save(any(Arret.class))).thenAnswer(inv -> {
+            Arret a = inv.getArgument(0);
+            a.setId(ARRET_ID);
+            return a;
+        });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of(c1, c2));
+        when(arretConteneurRepository.save(any(ArretConteneur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        arretService.creer(dto);
+
+        ArgumentCaptor<ArretConteneur> captor = ArgumentCaptor.forClass(ArretConteneur.class);
+        verify(arretConteneurRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(ac -> ac.getConteneur().getId())
+                .containsExactlyInAnyOrder(101L, 102L);
+        assertThat(captor.getAllValues()).allSatisfy(ac -> assertThat(ac.getStatut()).isEqualTo(StatutArret.EN_ATTENTE));
     }
 
     @Test
@@ -161,5 +216,37 @@ class ArretServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).residenceId()).isEqualTo(RESIDENCE_ID);
+    }
+
+    @Test
+    void getConteneursEchoueSiLArretEstIntrouvable() {
+        when(arretRepository.existsById(ARRET_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> arretService.getConteneurs(ARRET_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Arrêt introuvable");
+    }
+
+    @Test
+    void getConteneursRetourneLeDetailParBac() {
+        Conteneur conteneur = Conteneur.builder().id(101L).code("023").residence(residence())
+                .niveauRemplissagePct((short) 80).build();
+        ArretConteneur ligne = ArretConteneur.builder()
+                .id(500L)
+                .arret(arret())
+                .conteneur(conteneur)
+                .statut(StatutArret.COLLECTE_CONFIRMEE)
+                .scoreConfiance((short) 90)
+                .build();
+        when(arretRepository.existsById(ARRET_ID)).thenReturn(true);
+        when(arretConteneurRepository.findByArretId(ARRET_ID)).thenReturn(List.of(ligne));
+
+        List<ArretConteneurResponseDto> result = arretService.getConteneurs(ARRET_ID);
+
+        assertThat(result).hasSize(1);
+        ArretConteneurResponseDto dto = result.get(0);
+        assertThat(dto.conteneurId()).isEqualTo(101L);
+        assertThat(dto.statut()).isEqualTo(StatutArret.COLLECTE_CONFIRMEE);
+        assertThat(dto.niveauRemplissagePct()).isEqualTo(80);
     }
 }
