@@ -130,13 +130,6 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- MapStruct — pour les DTO -->
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>1.5.5.Final</version>
-        </dependency>
-
         <!-- WebSocket — pour les notifications -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
