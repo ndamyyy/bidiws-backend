@@ -2,6 +2,7 @@ package com.bidiws.security;
 
 import com.bidiws.entity.Arret;
 import com.bidiws.entity.CalendrierCollecte;
+import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
@@ -9,6 +10,7 @@ import com.bidiws.enums.Role;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CalendrierCollecteRepository;
 import com.bidiws.repository.CamionRepository;
+import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -54,6 +56,8 @@ class AuthorizationServiceTest {
     private CalendrierCollecteRepository calendrierCollecteRepository;
     @Mock
     private CamionRepository camionRepository;
+    @Mock
+    private ConteneurRepository conteneurRepository;
 
     @InjectMocks
     private AuthorizationService authorizationService;
@@ -63,6 +67,7 @@ class AuthorizationServiceTest {
     private static final Long CALENDRIER_ID = 300L;
     private static final Long SIGNALEMENT_ID = 400L;
     private static final Long CAMION_ID = 500L;
+    private static final Long CONTENEUR_ID = 600L;
     private static final Long RESIDENCE_ID = 1L;
     private static final Long VILLE_A_ID = 10L;
     private static final Long VILLE_B_ID = 20L;
@@ -287,5 +292,57 @@ class AuthorizationServiceTest {
         Authentication gardien = authentification(5L, Role.GARDIEN, null);
 
         assertThat(authorizationService.canAccessCamion(CAMION_ID, gardien)).isFalse();
+    }
+
+    // ── canAccessConteneur ─────────────────────────────────────────
+
+    private Conteneur conteneurPourResidenceDansVille(Long villeId) {
+        Residence residence = Residence.builder()
+                .id(RESIDENCE_ID)
+                .ville(Ville.builder().id(villeId).build())
+                .build();
+        return Conteneur.builder().id(CONTENEUR_ID).residence(residence).build();
+    }
+
+    @Test
+    void unGardienDeLaResidenceDuConteneurAAcces() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(conteneurPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceGardienRepository.existsByResidenceIdAndGardienId(RESIDENCE_ID, 5L)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessConteneur(CONTENEUR_ID, gardien)).isTrue();
+    }
+
+    @Test
+    void unGardienDuneAutreResidenceNaPasAccesAuConteneur() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(conteneurPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceGardienRepository.existsByResidenceIdAndGardienId(RESIDENCE_ID, 5L)).thenReturn(false);
+
+        assertThat(authorizationService.canAccessConteneur(CONTENEUR_ID, gardien)).isFalse();
+    }
+
+    @Test
+    void uneMairieDeLaVilleDuConteneurAAcces() {
+        Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_A_ID);
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(conteneurPourResidenceDansVille(VILLE_A_ID)));
+        when(residenceRepository.existsByIdAndVilleId(RESIDENCE_ID, VILLE_A_ID)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessConteneur(CONTENEUR_ID, mairie)).isTrue();
+    }
+
+    @Test
+    void conteneurIntrouvableRefuseLAccesAuxRolesNonAdmin() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.empty());
+
+        assertThat(authorizationService.canAccessConteneur(CONTENEUR_ID, gardien)).isFalse();
+    }
+
+    @Test
+    void adminAccedeAToutConteneur() {
+        Authentication admin = authentification(1L, Role.ADMIN, null);
+
+        assertThat(authorizationService.canAccessConteneur(CONTENEUR_ID, admin)).isTrue();
     }
 }
