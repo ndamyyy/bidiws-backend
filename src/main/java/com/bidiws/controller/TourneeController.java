@@ -2,6 +2,7 @@ package com.bidiws.controller;
 
 import com.bidiws.dto.tournee.TourneeRequestDto;
 import com.bidiws.dto.tournee.TourneeResponseDto;
+import com.bidiws.security.CustomUserDetails;
 import com.bidiws.service.TourneeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -56,14 +58,15 @@ public class TourneeController {
             "or (#chauffeurId != null and @authorizationService.isSelf(#chauffeurId, authentication))")
     public ResponseEntity<List<TourneeResponseDto>> getAll(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false) Long chauffeurId
+            @RequestParam(required = false) Long chauffeurId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         if (date != null) {
-            return ResponseEntity.ok(tourneeService.getByDate(date));
+            return ResponseEntity.ok(tourneeService.getByDate(date, userDetails));
         }
         if (chauffeurId != null) {
-            return ResponseEntity.ok(tourneeService.getByChauffeur(chauffeurId));
+            return ResponseEntity.ok(tourneeService.getByChauffeur(chauffeurId, userDetails));
         }
-        return ResponseEntity.ok(tourneeService.getAll());
+        return ResponseEntity.ok(tourneeService.getAll(userDetails));
     }
 }

@@ -41,4 +41,8 @@ public class Camion {
     @Column(name = "actif")
     @Builder.Default
     private Boolean actif = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ville_id")
+    private Ville ville;
 }

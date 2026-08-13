@@ -8,6 +8,7 @@ import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CalendrierCollecteRepository;
+import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -51,6 +52,8 @@ class AuthorizationServiceTest {
     private ResidenceRepository residenceRepository;
     @Mock
     private CalendrierCollecteRepository calendrierCollecteRepository;
+    @Mock
+    private CamionRepository camionRepository;
 
     @InjectMocks
     private AuthorizationService authorizationService;
@@ -59,6 +62,7 @@ class AuthorizationServiceTest {
     private static final Long ARRET_ID = 200L;
     private static final Long CALENDRIER_ID = 300L;
     private static final Long SIGNALEMENT_ID = 400L;
+    private static final Long CAMION_ID = 500L;
     private static final Long RESIDENCE_ID = 1L;
     private static final Long VILLE_A_ID = 10L;
     private static final Long VILLE_B_ID = 20L;
@@ -244,5 +248,44 @@ class AuthorizationServiceTest {
         Authentication habitant = authentification(8L, Role.HABITANT, null);
 
         assertThat(authorizationService.canModerateSignalement(SIGNALEMENT_ID, habitant)).isFalse();
+    }
+
+    // ── canAccessCamion ────────────────────────────────────────────
+
+    @Test
+    void adminAccedeAToutCamion() {
+        Authentication admin = authentification(1L, Role.ADMIN, null);
+
+        assertThat(authorizationService.canAccessCamion(CAMION_ID, admin)).isTrue();
+    }
+
+    @Test
+    void uneMairieDeLaVilleDuCamionAAcces() {
+        Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_A_ID);
+        when(camionRepository.existsByIdAndVilleId(CAMION_ID, VILLE_A_ID)).thenReturn(true);
+
+        assertThat(authorizationService.canAccessCamion(CAMION_ID, mairie)).isTrue();
+    }
+
+    @Test
+    void uneMairieDuneAutreVilleNaPasAccesAuCamion() {
+        Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_B_ID);
+        when(camionRepository.existsByIdAndVilleId(CAMION_ID, VILLE_B_ID)).thenReturn(false);
+
+        assertThat(authorizationService.canAccessCamion(CAMION_ID, mairie)).isFalse();
+    }
+
+    @Test
+    void uneMairieSansVilleRattacheeNaAccesAAucunCamion() {
+        Authentication mairieSansVille = authentification(4L, Role.MAIRIE, null);
+
+        assertThat(authorizationService.canAccessCamion(CAMION_ID, mairieSansVille)).isFalse();
+    }
+
+    @Test
+    void unGardienNaJamaisAccesAUnCamion() {
+        Authentication gardien = authentification(5L, Role.GARDIEN, null);
+
+        assertThat(authorizationService.canAccessCamion(CAMION_ID, gardien)).isFalse();
     }
 }
