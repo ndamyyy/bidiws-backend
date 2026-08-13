@@ -1,7 +1,9 @@
 package com.bidiws.security;
 
 import com.bidiws.entity.Arret;
+import com.bidiws.entity.CalendrierCollecte;
 import com.bidiws.repository.ArretRepository;
+import com.bidiws.repository.CalendrierCollecteRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -12,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 
 @Component("authorizationService")
 @RequiredArgsConstructor
@@ -23,6 +26,7 @@ public class AuthorizationService {
     private final ResidenceGardienRepository residenceGardienRepository;
     private final ResidenceSyndicRepository residenceSyndicRepository;
     private final ResidenceRepository residenceRepository;
+    private final CalendrierCollecteRepository calendrierCollecteRepository;
 
     public boolean isAssignedChauffeur(Long tourneeId, Authentication authentication) {
         if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)
@@ -64,6 +68,26 @@ public class AuthorizationService {
         return hasAuthority(authentication, "ROLE_MAIRIE")
                 && userDetails.getVilleId() != null
                 && signalementRepository.existsByIdAndResidence_Ville_Id(signalementId, userDetails.getVilleId());
+    }
+
+    // Reservee au traitement d'un signalement (changement de statut) : contrairement
+    // a canAccessSignalement, pas de bypass "c'est le mien" pour l'auteur, sinon un
+    // habitant pourrait cloturer lui-meme son propre signalement.
+    public boolean canModerateSignalement(Long signalementId, Authentication authentication) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
+            return false;
+        }
+        if (hasAuthority(authentication, "ROLE_GARDIEN")) {
+            return signalementRepository.existsByIdAndResidence_Gardiens_Gardien_Id(signalementId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
+            return userDetails.getVilleId() != null
+                    && signalementRepository.existsByIdAndResidence_Ville_Id(signalementId, userDetails.getVilleId());
+        }
+        return false;
     }
 
     public boolean isSelf(Long userId, Authentication authentication) {
@@ -121,6 +145,68 @@ public class AuthorizationService {
             Long villeId = userDetails.getVilleId();
             return villeId != null && arrets.stream().anyMatch(a ->
                     a.getResidence().getVille() != null && villeId.equals(a.getResidence().getVille().getId()));
+        }
+        return false;
+    }
+
+    // Un GET par id doit rester au meme niveau de rattachement que le reste de la
+    // classe : chauffeur assigne a la tournee de l'arret, ou residence liee
+    // (gardien/syndic/mairie), pas juste "authentifie".
+    public boolean canAccessArret(Long arretId, Authentication authentication) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
+            return false;
+        }
+        if (hasAuthority(authentication, "ROLE_CHAUFFEUR")) {
+            return arretRepository.existsByIdAndTourneeChauffeurId(arretId, userDetails.getId());
+        }
+
+        Optional<Arret> arret = arretRepository.findById(arretId);
+        if (arret.isEmpty()) {
+            return false;
+        }
+        Long residenceId = arret.get().getResidence().getId();
+
+        if (hasAuthority(authentication, "ROLE_GARDIEN")) {
+            return residenceGardienRepository.existsByResidenceIdAndGardienId(residenceId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_SYNDIC")) {
+            return residenceSyndicRepository.existsByResidenceIdAndSyndicId(residenceId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
+            return userDetails.getVilleId() != null
+                    && residenceRepository.existsByIdAndVilleId(residenceId, userDetails.getVilleId());
+        }
+        return false;
+    }
+
+    // Meme regle de rattachement que canAccessArret, appliquee au calendrier de
+    // collecte plutot qu'a l'arret : le calendrier appartient directement a une residence.
+    public boolean canAccessCalendrier(Long calendrierId, Authentication authentication) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
+            return false;
+        }
+
+        Optional<CalendrierCollecte> calendrier = calendrierCollecteRepository.findById(calendrierId);
+        if (calendrier.isEmpty()) {
+            return false;
+        }
+        Long residenceId = calendrier.get().getResidence().getId();
+
+        if (hasAuthority(authentication, "ROLE_GARDIEN")) {
+            return residenceGardienRepository.existsByResidenceIdAndGardienId(residenceId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_SYNDIC")) {
+            return residenceSyndicRepository.existsByResidenceIdAndSyndicId(residenceId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
+            return userDetails.getVilleId() != null
+                    && residenceRepository.existsByIdAndVilleId(residenceId, userDetails.getVilleId());
         }
         return false;
     }

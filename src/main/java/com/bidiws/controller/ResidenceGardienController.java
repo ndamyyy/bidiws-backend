@@ -36,11 +36,15 @@ public class ResidenceGardienController {
     }
 
     @GetMapping("/residence/{residenceId}")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isSyndicOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isGardienOfResidence(#residenceId, authentication)")
     public ResponseEntity<List<ResidenceGardienResponseDto>> getByResidence(@PathVariable Long residenceId) {
         return ResponseEntity.ok(residenceGardienService.getByResidence(residenceId));
     }
 
     @GetMapping("/gardien/{gardienId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isSelf(#gardienId, authentication)")
     public ResponseEntity<List<ResidenceGardienResponseDto>> getByGardien(@PathVariable Long gardienId) {
         return ResponseEntity.ok(residenceGardienService.getByGardien(gardienId));
     }

@@ -47,11 +47,13 @@ public class ArretController {
 
 
     @GetMapping("/{id}")
+    @PreAuthorize("@authorizationService.canAccessArret(#id, authentication)")
     public ResponseEntity<ArretResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(arretService.getById(id));
     }
 
     @GetMapping("/tournee/{tourneeId}")
+    @PreAuthorize("@authorizationService.canAccessTournee(#tourneeId, authentication)")
     public ResponseEntity<List<ArretResponseDto>> getByTournee(@PathVariable Long tourneeId) {
         return ResponseEntity.ok(arretService.getByTournee(tourneeId));
     }

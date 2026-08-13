@@ -35,6 +35,7 @@ public class CalendrierCollecteController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@authorizationService.canAccessCalendrier(#id, authentication)")
     public ResponseEntity<CalendrierCollecteResponseDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(calendrierCollecteService.getById(id));
     }
