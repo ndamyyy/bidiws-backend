@@ -1,6 +1,8 @@
 package com.bidiws.repository;
 
 import com.bidiws.entity.SignalGps;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
@@ -13,10 +15,11 @@ public interface SignalGpsRepository extends JpaRepository<SignalGps, Long> {
 
     List<SignalGps> findByTourneeId(Long tourneeId);
 
-    List<SignalGps> findByTourneeIdOrderByHorodatageAsc(Long tourneeId);
+    Page<SignalGps> findByTourneeIdOrderByHorodatageAsc(Long tourneeId, Pageable pageable);
 
     Optional<SignalGps> findFirstByTourneeIdOrderByHorodatageDesc(Long tourneeId);
 
-    List<SignalGps> findByTourneeIdAndHorodatageBetween(Long tourneeId, LocalDateTime debut, LocalDateTime fin);
+    Page<SignalGps> findByTourneeIdAndHorodatageBetweenOrderByHorodatageAsc(
+            Long tourneeId, LocalDateTime debut, LocalDateTime fin, Pageable pageable);
 
 }
