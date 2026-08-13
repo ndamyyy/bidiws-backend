@@ -5,6 +5,7 @@ import com.bidiws.enums.StatutArret;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,12 @@ import java.util.Optional;
 public interface ArretRepository extends JpaRepository<Arret, Long> {
 
     List<Arret> findByTourneeId(Long tourneeId);
+
+    // Resout "l'arret du jour" pour une residence, utilise par la detection
+    // IoT qui ne connait que le conteneur/residence, pas la tournee. Retourne
+    // une liste (pas Optional<Arret>) car rien n'empeche plusieurs tournees
+    // le meme jour pour la meme residence (types de collecte differents).
+    List<Arret> findByResidenceIdAndTournee_DateTournee(Long residenceId, LocalDate dateTournee);
 
     List<Arret> findByTourneeIdOrderByOrdreAsc(Long tourneeId);
 

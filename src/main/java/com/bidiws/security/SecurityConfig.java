@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -33,6 +34,7 @@ public class SecurityConfig {
 
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final DeviceApiKeyAuthenticationFilter deviceApiKeyAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
     @Value("${bidiws.websocket.allowed-origins}")
@@ -45,7 +47,29 @@ public class SecurityConfig {
             "/ws/**"
     };
 
+    // Chaine dediee aux appareils IoT : cle API (X-Device-Api-Key), pas de
+    // JWT. Isolee du reste — si une cle fuit un jour, ca ne touche que ce
+    // perimetre, jamais l'authentification utilisateur. @Order(1) : evaluee
+    // avant la chaine principale, qui ne voit donc jamais /iot/**.
     @Bean
+    @Order(1)
+    public SecurityFilterChain iotFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/iot/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(this::handleUnauthorized)
+                        .accessDeniedHandler(this::handleForbidden)
+                )
+                .addFilterBefore(deviceApiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())

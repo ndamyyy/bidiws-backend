@@ -2,9 +2,11 @@ package com.bidiws.security;
 
 import com.bidiws.entity.Arret;
 import com.bidiws.entity.CalendrierCollecte;
+import com.bidiws.entity.Conteneur;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CalendrierCollecteRepository;
 import com.bidiws.repository.CamionRepository;
+import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -29,6 +31,7 @@ public class AuthorizationService {
     private final ResidenceRepository residenceRepository;
     private final CalendrierCollecteRepository calendrierCollecteRepository;
     private final CamionRepository camionRepository;
+    private final ConteneurRepository conteneurRepository;
 
     public boolean isAssignedChauffeur(Long tourneeId, Authentication authentication) {
         if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)
@@ -226,6 +229,35 @@ public class AuthorizationService {
         }
         return userDetails.getVilleId() != null
                 && camionRepository.existsByIdAndVilleId(camionId, userDetails.getVilleId());
+    }
+
+    // Meme regle de rattachement que canAccessCalendrier : le conteneur
+    // appartient directement a une residence.
+    public boolean canAccessConteneur(Long conteneurId, Authentication authentication) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+        if (!(authentication.getPrincipal() instanceof CustomUserDetails userDetails)) {
+            return false;
+        }
+
+        Optional<Conteneur> conteneur = conteneurRepository.findById(conteneurId);
+        if (conteneur.isEmpty()) {
+            return false;
+        }
+        Long residenceId = conteneur.get().getResidence().getId();
+
+        if (hasAuthority(authentication, "ROLE_GARDIEN")) {
+            return residenceGardienRepository.existsByResidenceIdAndGardienId(residenceId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_SYNDIC")) {
+            return residenceSyndicRepository.existsByResidenceIdAndSyndicId(residenceId, userDetails.getId());
+        }
+        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
+            return userDetails.getVilleId() != null
+                    && residenceRepository.existsByIdAndVilleId(residenceId, userDetails.getVilleId());
+        }
+        return false;
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {
