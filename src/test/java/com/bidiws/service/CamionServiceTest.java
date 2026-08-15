@@ -6,8 +6,10 @@ import com.bidiws.entity.Camion;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ChauffeurCamionRepository;
+import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.VilleRepository;
 import com.bidiws.security.CustomUserDetails;
 import org.junit.jupiter.api.Test;
@@ -22,8 +24,10 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -38,6 +42,8 @@ class CamionServiceTest {
     private CamionRepository camionRepository;
     @Mock
     private ChauffeurCamionRepository chauffeurCamionRepository;
+    @Mock
+    private TourneeRepository tourneeRepository;
     @Mock
     private VilleRepository villeRepository;
 
@@ -192,5 +198,31 @@ class CamionServiceTest {
         assertThatThrownBy(() -> camionService.desactiver(CAMION_ID, admin))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("chauffeur est actuellement affecté");
+    }
+
+    @Test
+    void desactiverEchoueSiUneTourneeEstEnCours() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionDansVille(VILLE_A_ID)));
+        when(chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(CAMION_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByCamionIdAndStatut(CAMION_ID, StatutTournee.EN_COURS)).thenReturn(true);
+
+        assertThatThrownBy(() -> camionService.desactiver(CAMION_ID, admin))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("tournée en cours");
+    }
+
+    @Test
+    void desactiverFonctionneSansAffectationNiTourneeEnCours() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        Camion camion = camionDansVille(VILLE_A_ID);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camion));
+        when(chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(CAMION_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByCamionIdAndStatut(CAMION_ID, StatutTournee.EN_COURS)).thenReturn(false);
+
+        assertThatCode(() -> camionService.desactiver(CAMION_ID, admin)).doesNotThrowAnyException();
+
+        assertThat(camion.getActif()).isFalse();
+        verify(camionRepository).save(camion);
     }
 }

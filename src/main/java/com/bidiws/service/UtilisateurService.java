@@ -4,6 +4,9 @@ import com.bidiws.dto.utilisateur.*;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
+import com.bidiws.enums.StatutTournee;
+import com.bidiws.repository.ChauffeurCamionRepository;
+import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.repository.VilleRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,8 @@ public class UtilisateurService {
 
     private final UtilisateurRepository utilisateurRepository;
     private final VilleRepository villeRepository;
+    private final ChauffeurCamionRepository chauffeurCamionRepository;
+    private final TourneeRepository tourneeRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
@@ -109,6 +114,11 @@ public class UtilisateurService {
     public void setActif(Long id, boolean actif) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+
+        if (!actif && utilisateur.getRole() == Role.CHAUFFEUR) {
+            verifierPasDaffectationActiveChauffeur(id);
+        }
+
         utilisateur.setActif(actif);
         utilisateurRepository.save(utilisateur);
     }
@@ -117,8 +127,30 @@ public class UtilisateurService {
     public UtilisateurResponseDto changerRole(Long id, Role role) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+
+        // Promouvoir vers CHAUFFEUR n'a pas cette notion d'affectation active a
+        // verifier ; seul le fait de RETIRER le role a quelqu'un qui l'a deja
+        // est concerne, meme logique que setActif(false).
+        if (utilisateur.getRole() == Role.CHAUFFEUR && role != Role.CHAUFFEUR) {
+            verifierPasDaffectationActiveChauffeur(id);
+        }
+
         utilisateur.setRole(role);
         return toResponseDto(utilisateurRepository.save(utilisateur));
+    }
+
+    // Utilise par setActif(false) et changerRole (retrait du role CHAUFFEUR) :
+    // un chauffeur avec une affectation camion active (dateFin == null) ou une
+    // tournee EN_COURS ne peut etre ni desactive ni change de role, meme
+    // raisonnement que CamionService.desactiver cote camion.
+    private void verifierPasDaffectationActiveChauffeur(Long chauffeurId) {
+        boolean affectationActive = chauffeurCamionRepository.findByChauffeurIdAndDateFinIsNull(chauffeurId).isPresent();
+        boolean tourneeEnCours = tourneeRepository.existsByChauffeurIdAndStatut(chauffeurId, StatutTournee.EN_COURS);
+
+        if (affectationActive || tourneeEnCours) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de désactiver : ce chauffeur a une affectation active ou une tournée en cours");
+        }
     }
 
     // Rattache un compte MAIRIE a la ville dont il pourra voir/gerer les

@@ -5,8 +5,10 @@ import com.bidiws.dto.camion.CamionResponseDto;
 import com.bidiws.entity.Camion;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ChauffeurCamionRepository;
+import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.VilleRepository;
 import com.bidiws.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ public class CamionService {
 
     private final CamionRepository camionRepository;
     private final ChauffeurCamionRepository chauffeurCamionRepository;
+    private final TourneeRepository tourneeRepository;
     private final VilleRepository villeRepository;
 
     @Transactional
@@ -141,6 +144,11 @@ public class CamionService {
         if (chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(id).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Impossible de désactiver : un chauffeur est actuellement affecté à ce camion");
+        }
+
+        if (tourneeRepository.existsByCamionIdAndStatut(id, StatutTournee.EN_COURS)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de désactiver : ce camion est sur une tournée en cours");
         }
 
         camion.setActif(false);
