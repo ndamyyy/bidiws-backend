@@ -28,6 +28,8 @@ public interface ArretRepository extends JpaRepository<Arret, Long> {
 
     List<Arret> findByStatut(StatutArret statut);
 
+    List<Arret> findByTourneeIdAndStatut(Long tourneeId, StatutArret statut);
+
     List<Arret> findByIncidentTrue();
 
     List<Arret> findByResidenceIdOrderByCreatedAtDesc(Long residenceId);
