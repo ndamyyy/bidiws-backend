@@ -24,4 +24,6 @@ public interface ResidenceRepository extends JpaRepository<Residence, Long> {
     boolean existsByVilleIdAndAdresseIgnoreCase(Long villeId, String adresse);
 
     boolean existsByIdAndVilleId(Long id, Long villeId);
+
+    boolean existsByVilleId(Long villeId);
 }

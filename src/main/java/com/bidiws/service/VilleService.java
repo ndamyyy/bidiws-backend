@@ -3,6 +3,9 @@ package com.bidiws.service;
 import com.bidiws.dto.ville.VilleRequestDto;
 import com.bidiws.dto.ville.VilleResponseDto;
 import com.bidiws.entity.Ville;
+import com.bidiws.repository.CamionRepository;
+import com.bidiws.repository.ResidenceRepository;
+import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.repository.VilleRepository;
 import com.bidiws.repository.ZoneRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,9 @@ public class VilleService {
 
     private final VilleRepository villeRepository;
     private final ZoneRepository zoneRepository;
+    private final CamionRepository camionRepository;
+    private final UtilisateurRepository utilisateurRepository;
+    private final ResidenceRepository residenceRepository;
 
     @Transactional
     public VilleResponseDto create(VilleRequestDto dto) {
@@ -79,6 +85,24 @@ public class VilleService {
         if (!zoneRepository.findByVilleId(id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Impossible de supprimer : des zones sont rattachées à cette ville");
+        }
+
+        // residence.zone_id est nullable (V1) : une residence sans zone
+        // rattachee ne serait pas bloquee par le check zones ci-dessus, d'ou
+        // ce check separe sur residence.ville_id (toujours renseigne).
+        if (residenceRepository.existsByVilleId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de supprimer : des résidences sont rattachées à cette ville");
+        }
+
+        if (camionRepository.existsByVilleId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de supprimer : des camions sont rattachés à cette ville");
+        }
+
+        if (utilisateurRepository.existsByVilleId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de supprimer : des comptes MAIRIE sont rattachés à cette ville");
         }
 
         villeRepository.deleteById(ville.getId());

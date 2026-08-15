@@ -23,4 +23,6 @@ public interface CamionRepository extends JpaRepository<Camion, Long> {
     List<Camion> findByVilleId(Long villeId);
 
     boolean existsByIdAndVilleId(Long id, Long villeId);
+
+    boolean existsByVilleId(Long villeId);
 }

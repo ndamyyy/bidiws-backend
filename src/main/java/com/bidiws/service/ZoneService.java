@@ -5,6 +5,7 @@ import com.bidiws.dto.zone.ZoneResponseDto;
 import com.bidiws.entity.Ville;
 import com.bidiws.entity.Zone;
 import com.bidiws.repository.ResidenceRepository;
+import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.VilleRepository;
 import com.bidiws.repository.ZoneRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class ZoneService {
     private final ZoneRepository zoneRepository;
     private final VilleRepository villeRepository;
     private final ResidenceRepository residenceRepository;
+    private final TourneeRepository tourneeRepository;
 
     @Transactional
     public ZoneResponseDto create(ZoneRequestDto dto) {
@@ -91,6 +93,11 @@ public class ZoneService {
         if (!residenceRepository.findByZoneId(id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Impossible de supprimer : des résidences sont rattachées à cette zone");
+        }
+
+        if (tourneeRepository.existsByZoneId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de supprimer : des tournées sont rattachées à cette zone");
         }
 
         zoneRepository.deleteById(zone.getId());
