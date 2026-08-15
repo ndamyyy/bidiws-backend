@@ -65,6 +65,15 @@ class TourneeServiceTest {
         return Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").actif(true).build();
     }
 
+    private Camion camionActifDeVille(Long villeId) {
+        return Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").actif(true)
+                .ville(Ville.builder().id(villeId).build()).build();
+    }
+
+    private Zone zoneDeVille(Long villeId) {
+        return Zone.builder().id(ZONE_ID).ville(Ville.builder().id(villeId).build()).build();
+    }
+
     private Utilisateur chauffeurActif() {
         return Utilisateur.builder().id(CHAUFFEUR_ID).nom("Diop").prenom("Amy").role(Role.CHAUFFEUR).actif(true).build();
     }
@@ -156,6 +165,55 @@ class TourneeServiceTest {
         assertThatThrownBy(() -> tourneeService.create(dtoAvecZone))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Zone introuvable");
+    }
+
+    @Test
+    void createAccepteUneZoneDeLaMemeVilleQueLeCamion() {
+        TourneeRequestDto dtoAvecZone = new TourneeRequestDto(LocalDate.of(2026, 8, 1), TYPE_COLLECTE_ID, CAMION_ID, CHAUFFEUR_ID, ZONE_ID);
+        when(typeCollecteRepository.findById(TYPE_COLLECTE_ID)).thenReturn(Optional.of(typeCollecte()));
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionActifDeVille(VILLE_A_ID)));
+        when(utilisateurRepository.findById(CHAUFFEUR_ID)).thenReturn(Optional.of(chauffeurActif()));
+        when(zoneRepository.findById(ZONE_ID)).thenReturn(Optional.of(zoneDeVille(VILLE_A_ID)));
+        when(tourneeRepository.save(any(Tournee.class))).thenAnswer(inv -> {
+            Tournee t = inv.getArgument(0);
+            t.setId(TOURNEE_ID);
+            return t;
+        });
+
+        TourneeResponseDto result = tourneeService.create(dtoAvecZone);
+
+        assertThat(result.zoneId()).isEqualTo(ZONE_ID);
+    }
+
+    @Test
+    void createEchoueSiLaZoneAppartientAUneAutreVilleQueLeCamion() {
+        TourneeRequestDto dtoAvecZone = new TourneeRequestDto(LocalDate.of(2026, 8, 1), TYPE_COLLECTE_ID, CAMION_ID, CHAUFFEUR_ID, ZONE_ID);
+        when(typeCollecteRepository.findById(TYPE_COLLECTE_ID)).thenReturn(Optional.of(typeCollecte()));
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionActifDeVille(VILLE_A_ID)));
+        when(utilisateurRepository.findById(CHAUFFEUR_ID)).thenReturn(Optional.of(chauffeurActif()));
+        when(zoneRepository.findById(ZONE_ID)).thenReturn(Optional.of(zoneDeVille(VILLE_B_ID)));
+
+        assertThatThrownBy(() -> tourneeService.create(dtoAvecZone))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Cette zone n'appartient pas à la ville du camion sélectionné");
+    }
+
+    @Test
+    void createAccepteUneZoneSansValidationSiLeCamionNaPasDeVille() {
+        TourneeRequestDto dtoAvecZone = new TourneeRequestDto(LocalDate.of(2026, 8, 1), TYPE_COLLECTE_ID, CAMION_ID, CHAUFFEUR_ID, ZONE_ID);
+        when(typeCollecteRepository.findById(TYPE_COLLECTE_ID)).thenReturn(Optional.of(typeCollecte()));
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionActif()));
+        when(utilisateurRepository.findById(CHAUFFEUR_ID)).thenReturn(Optional.of(chauffeurActif()));
+        when(zoneRepository.findById(ZONE_ID)).thenReturn(Optional.of(zoneDeVille(VILLE_B_ID)));
+        when(tourneeRepository.save(any(Tournee.class))).thenAnswer(inv -> {
+            Tournee t = inv.getArgument(0);
+            t.setId(TOURNEE_ID);
+            return t;
+        });
+
+        TourneeResponseDto result = tourneeService.create(dtoAvecZone);
+
+        assertThat(result.zoneId()).isEqualTo(ZONE_ID);
     }
 
     @Test
