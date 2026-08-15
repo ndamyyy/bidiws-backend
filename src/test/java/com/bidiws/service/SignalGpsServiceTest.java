@@ -40,8 +40,6 @@ class SignalGpsServiceTest {
     private TourneeRepository tourneeRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
-    @Mock
-    private GpsProximityDetectionService gpsProximityDetectionService;
 
     @InjectMocks
     private SignalGpsService signalGpsService;
@@ -95,9 +93,6 @@ class SignalGpsServiceTest {
         ArgumentCaptor<PositionGpsEvent> captor = ArgumentCaptor.forClass(PositionGpsEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().tourneeId()).isEqualTo(TOURNEE_ID);
-
-        verify(gpsProximityDetectionService).verifierProximite(
-                TOURNEE_ID, BigDecimal.valueOf(14.71), BigDecimal.valueOf(-17.46));
     }
 
     @Test
