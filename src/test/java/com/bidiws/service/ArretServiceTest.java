@@ -11,6 +11,7 @@ import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ConteneurRepository;
@@ -65,6 +66,10 @@ class ArretServiceTest {
         return Tournee.builder().id(TOURNEE_ID).build();
     }
 
+    private Tournee tournee(StatutTournee statut) {
+        return Tournee.builder().id(TOURNEE_ID).statut(statut).build();
+    }
+
     private Residence residence() {
         return Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").build();
     }
@@ -117,6 +122,43 @@ class ArretServiceTest {
         assertThat(result.id()).isEqualTo(ARRET_ID);
         assertThat(result.statut()).isEqualTo(StatutArret.EN_ATTENTE);
         assertThat(result.ordre()).isEqualTo(2);
+    }
+
+    @Test
+    void creerEchoueSiLaTourneeEstTerminee() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.TERMINEE)));
+
+        assertThatThrownBy(() -> arretService.creer(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("terminée ou annulée");
+    }
+
+    @Test
+    void creerEchoueSiLaTourneeEstAnnulee() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.ANNULEE)));
+
+        assertThatThrownBy(() -> arretService.creer(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("terminée ou annulée");
+    }
+
+    @Test
+    void creerFonctionnePourUneTourneeEnCours() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.EN_COURS)));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence()));
+        when(arretRepository.save(any(Arret.class))).thenAnswer(inv -> {
+            Arret a = inv.getArgument(0);
+            a.setId(ARRET_ID);
+            return a;
+        });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of());
+
+        ArretResponseDto result = arretService.creer(dto);
+
+        assertThat(result.id()).isEqualTo(ARRET_ID);
     }
 
     @Test

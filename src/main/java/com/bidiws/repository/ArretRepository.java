@@ -3,6 +3,8 @@ package com.bidiws.repository;
 import com.bidiws.entity.Arret;
 import com.bidiws.enums.StatutArret;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -27,6 +29,15 @@ public interface ArretRepository extends JpaRepository<Arret, Long> {
     List<Arret> findByResidenceId(Long residenceId);
 
     List<Arret> findByStatut(StatutArret statut);
+
+    // Utilisee par la detection GPS de proximite : ne remonte que les arrets
+    // dont la tournee parente est encore PLANIFIEE ou EN_COURS. Filtre pose
+    // directement ici (plutot qu'en boucle Java cote appelant) pour qu'un
+    // arret orphelin sur une tournee TERMINEE/ANNULEE ne soit jamais meme
+    // charge, encore moins pousse en COLLECTE_PROBABLE par un signal GPS.
+    @Query("SELECT a FROM Arret a WHERE a.tournee.id = :tourneeId AND a.statut = :statut "
+            + "AND a.tournee.statut IN (com.bidiws.enums.StatutTournee.PLANIFIEE, com.bidiws.enums.StatutTournee.EN_COURS)")
+    List<Arret> findByTourneeIdAndStatut(@Param("tourneeId") Long tourneeId, @Param("statut") StatutArret statut);
 
     List<Arret> findByIncidentTrue();
 

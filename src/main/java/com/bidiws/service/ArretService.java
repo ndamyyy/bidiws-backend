@@ -11,6 +11,7 @@ import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ConteneurRepository;
@@ -41,6 +42,11 @@ public class ArretService {
 
         Tournee tournee = tourneeRepository.findById(dto.tourneeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tournée introuvable"));
+
+        if (tournee.getStatut() == StatutTournee.TERMINEE || tournee.getStatut() == StatutTournee.ANNULEE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible d'ajouter un arrêt à une tournée terminée ou annulée");
+        }
 
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));

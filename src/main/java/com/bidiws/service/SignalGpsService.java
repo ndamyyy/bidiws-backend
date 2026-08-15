@@ -26,6 +26,7 @@ public class SignalGpsService {
     private final SignalGpsRepository signalGpsRepository;
     private final TourneeRepository tourneeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final GpsProximityDetectionService gpsProximityDetectionService;
 
     @Transactional
     public SignalGpsResponseDto enregistrer(SignalGpsRequestDto dto) {
@@ -45,6 +46,9 @@ public class SignalGpsService {
                 .build();
 
         SignalGps saved = signalGpsRepository.save(signal);
+
+        gpsProximityDetectionService.verifierProximite(
+                saved.getTournee().getId(), saved.getLatitude(), saved.getLongitude());
 
         eventPublisher.publishEvent(new PositionGpsEvent(
                 saved.getTournee().getId(),
