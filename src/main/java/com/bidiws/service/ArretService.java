@@ -9,8 +9,10 @@ import com.bidiws.entity.ArretConteneur;
 import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
+import com.bidiws.entity.Ville;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ConteneurRepository;
@@ -42,8 +44,24 @@ public class ArretService {
         Tournee tournee = tourneeRepository.findById(dto.tourneeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tournée introuvable"));
 
+        if (tournee.getStatut() == StatutTournee.TERMINEE || tournee.getStatut() == StatutTournee.ANNULEE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible d'ajouter un arrêt à une tournée terminée ou annulée");
+        }
+
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
+
+        // Meme raisonnement fail-open que TourneeService.resoudreZone : le camion
+        // peut ne pas avoir de ville assignee (nullable, migration V4), auquel cas
+        // rien a valider plutot qu'un NPE. Sinon, contourne directement l'isolation
+        // par ville deja posee ailleurs (Camion/Tournee/ChauffeurCamion) si on
+        // laisse passer une residence d'une autre ville.
+        Ville villeCamion = tournee.getCamion().getVille();
+        if (villeCamion != null && !residence.getVille().getId().equals(villeCamion.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cette résidence n'appartient pas à la ville du camion de la tournée");
+        }
 
         Arret arret = Arret.builder()
                 .tournee(tournee)

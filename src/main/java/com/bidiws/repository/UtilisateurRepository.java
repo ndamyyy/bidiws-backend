@@ -31,4 +31,7 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Long> 
 
     // Liste des actifs
     List<Utilisateur> findByActifTrue();
+
+    // Comptes MAIRIE rattaches a une ville (cf. Utilisateur.ville, migration V2)
+    boolean existsByVilleId(Long villeId);
 }

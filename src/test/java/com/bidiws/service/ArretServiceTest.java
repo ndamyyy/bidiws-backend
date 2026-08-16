@@ -6,11 +6,14 @@ import com.bidiws.dto.arret.ArretRequestDto;
 import com.bidiws.dto.arret.ArretResponseDto;
 import com.bidiws.entity.Arret;
 import com.bidiws.entity.ArretConteneur;
+import com.bidiws.entity.Camion;
 import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Tournee;
+import com.bidiws.entity.Ville;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ConteneurRepository;
@@ -60,13 +63,36 @@ class ArretServiceTest {
     private static final Long TOURNEE_ID = 10L;
     private static final Long RESIDENCE_ID = 20L;
     private static final Long ARRET_ID = 1L;
+    private static final Long VILLE_A_ID = 100L;
+    private static final Long VILLE_B_ID = 200L;
 
+    // Camion et residence de la meme ville par defaut, pour que les tests
+    // existants (qui ne portent pas sur la coherence residence/ville) restent
+    // valides sans avoir chacun a la reaffirmer explicitement.
     private Tournee tournee() {
-        return Tournee.builder().id(TOURNEE_ID).build();
+        return Tournee.builder().id(TOURNEE_ID)
+                .camion(Camion.builder().id(1L).ville(Ville.builder().id(VILLE_A_ID).build()).build())
+                .build();
+    }
+
+    private Tournee tournee(StatutTournee statut) {
+        return Tournee.builder().id(TOURNEE_ID).statut(statut)
+                .camion(Camion.builder().id(1L).ville(Ville.builder().id(VILLE_A_ID).build()).build())
+                .build();
+    }
+
+    private Tournee tourneeAvecCamionDeVille(Long villeId) {
+        return Tournee.builder().id(TOURNEE_ID)
+                .camion(Camion.builder().id(1L).ville(villeId != null ? Ville.builder().id(villeId).build() : null).build())
+                .build();
     }
 
     private Residence residence() {
-        return Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").build();
+        return Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").ville(Ville.builder().id(VILLE_A_ID).build()).build();
+    }
+
+    private Residence residenceDeVille(Long villeId) {
+        return Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").ville(Ville.builder().id(villeId).build()).build();
     }
 
     private Arret arret() {
@@ -117,6 +143,88 @@ class ArretServiceTest {
         assertThat(result.id()).isEqualTo(ARRET_ID);
         assertThat(result.statut()).isEqualTo(StatutArret.EN_ATTENTE);
         assertThat(result.ordre()).isEqualTo(2);
+    }
+
+    @Test
+    void creerAccepteUneResidenceDeLaMemeVilleQueLeCamion() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecCamionDeVille(VILLE_A_ID)));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceDeVille(VILLE_A_ID)));
+        when(arretRepository.save(any(Arret.class))).thenAnswer(inv -> {
+            Arret a = inv.getArgument(0);
+            a.setId(ARRET_ID);
+            return a;
+        });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of());
+
+        ArretResponseDto result = arretService.creer(dto);
+
+        assertThat(result.id()).isEqualTo(ARRET_ID);
+    }
+
+    @Test
+    void creerEchoueSiLaResidenceAppartientAUneAutreVilleQueLeCamion() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecCamionDeVille(VILLE_A_ID)));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceDeVille(VILLE_B_ID)));
+
+        assertThatThrownBy(() -> arretService.creer(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Cette résidence n'appartient pas à la ville du camion de la tournée");
+    }
+
+    @Test
+    void creerAccepteUneResidenceSansValidationSiLeCamionNaPasDeVille() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecCamionDeVille(null)));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceDeVille(VILLE_B_ID)));
+        when(arretRepository.save(any(Arret.class))).thenAnswer(inv -> {
+            Arret a = inv.getArgument(0);
+            a.setId(ARRET_ID);
+            return a;
+        });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of());
+
+        ArretResponseDto result = arretService.creer(dto);
+
+        assertThat(result.id()).isEqualTo(ARRET_ID);
+    }
+
+    @Test
+    void creerEchoueSiLaTourneeEstTerminee() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.TERMINEE)));
+
+        assertThatThrownBy(() -> arretService.creer(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("terminée ou annulée");
+    }
+
+    @Test
+    void creerEchoueSiLaTourneeEstAnnulee() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.ANNULEE)));
+
+        assertThatThrownBy(() -> arretService.creer(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("terminée ou annulée");
+    }
+
+    @Test
+    void creerFonctionnePourUneTourneeEnCours() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.EN_COURS)));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence()));
+        when(arretRepository.save(any(Arret.class))).thenAnswer(inv -> {
+            Arret a = inv.getArgument(0);
+            a.setId(ARRET_ID);
+            return a;
+        });
+        when(conteneurRepository.findByResidenceIdAndActifTrue(RESIDENCE_ID)).thenReturn(List.of());
+
+        ArretResponseDto result = arretService.creer(dto);
+
+        assertThat(result.id()).isEqualTo(ARRET_ID);
     }
 
     @Test

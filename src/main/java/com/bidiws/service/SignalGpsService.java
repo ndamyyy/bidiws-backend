@@ -5,10 +5,12 @@ import com.bidiws.dto.signalgps.SignalGpsResponseDto;
 import com.bidiws.entity.SignalGps;
 import com.bidiws.entity.Tournee;
 import com.bidiws.enums.SourceGps;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.event.PositionGpsEvent;
 import com.bidiws.repository.SignalGpsRepository;
 import com.bidiws.repository.TourneeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SignalGpsService {
@@ -26,6 +29,7 @@ public class SignalGpsService {
     private final SignalGpsRepository signalGpsRepository;
     private final TourneeRepository tourneeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final GpsProximityDetectionService gpsProximityDetectionService;
 
     @Transactional
     public SignalGpsResponseDto enregistrer(SignalGpsRequestDto dto) {
@@ -46,13 +50,25 @@ public class SignalGpsService {
 
         SignalGps saved = signalGpsRepository.save(signal);
 
-        eventPublisher.publishEvent(new PositionGpsEvent(
-                saved.getTournee().getId(),
-                saved.getLatitude(),
-                saved.getLongitude(),
-                saved.getVitesseKmh(),
-                saved.getHorodatage()
-        ));
+        // Historique GPS conserve meme si la tournee n'est plus active (bruit
+        // mineur accepte) ; en revanche pas de detection ni de republication
+        // WebSocket sur une tournee morte — le camion continue d'emettre en
+        // continu independamment de ce que sait encore l'app du chauffeur.
+        if (tournee.getStatut() == StatutTournee.PLANIFIEE || tournee.getStatut() == StatutTournee.EN_COURS) {
+            gpsProximityDetectionService.verifierProximite(
+                    saved.getTournee().getId(), saved.getLatitude(), saved.getLongitude());
+
+            eventPublisher.publishEvent(new PositionGpsEvent(
+                    saved.getTournee().getId(),
+                    saved.getLatitude(),
+                    saved.getLongitude(),
+                    saved.getVitesseKmh(),
+                    saved.getHorodatage()
+            ));
+        } else {
+            log.warn("Signal GPS enregistre mais ignore (proximite + WebSocket) : tournee {} n'est plus active (statut {})",
+                    tournee.getId(), tournee.getStatut());
+        }
 
         return toResponseDto(saved);
     }

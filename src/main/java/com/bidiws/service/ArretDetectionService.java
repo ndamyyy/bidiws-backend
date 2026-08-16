@@ -3,6 +3,7 @@ package com.bidiws.service;
 import com.bidiws.entity.Arret;
 import com.bidiws.enums.ModeDetection;
 import com.bidiws.enums.StatutArret;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.event.ArretStatutChangeEvent;
 import com.bidiws.repository.ArretRepository;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,15 @@ public class ArretDetectionService {
         Arret arret = arretRepository.findById(arretId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable"));
 
+        if (!tourneeActive(arret)) {
+            log.warn(
+                    "Détection ignorée : tournée {} n'est plus active (statut {}) pour l'arrêt {}",
+                    arret.getTournee().getId(),
+                    arret.getTournee().getStatut(),
+                    arretId
+            );
+            return arret;
+        }
 
         log.info(
                 "Détection reçue : arrêt={}, mode={}, statut={}",
@@ -141,6 +151,16 @@ public class ArretDetectionService {
         Arret arret = arretRepository.findById(arretId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Arrêt introuvable"));
 
+        if (!tourneeActive(arret)) {
+            log.warn(
+                    "Signalement d'incident ignoré : tournée {} n'est plus active (statut {}) pour l'arrêt {}",
+                    arret.getTournee().getId(),
+                    arret.getTournee().getStatut(),
+                    arretId
+            );
+            return arret;
+        }
+
         StatutArret ancienStatut = arret.getStatut();
 
         arret.setStatut(StatutArret.INCIDENT);
@@ -180,5 +200,16 @@ public class ArretDetectionService {
             return false;
         }
         return ancien != nouveau;
+    }
+
+    // Garde-fou en amont de transitionAutorisee, pas dedans : une tournee
+    // TERMINEE/ANNULEE bloque TOUTE modification d'arret (detection normale
+    // comme signalement d'incident), pas seulement les transitions de statut
+    // d'arret entre elles. Jamais d'exception ici : ce point est appele aussi
+    // bien depuis un contexte utilisateur (chauffeur) que device/automatique
+    // (capteur, GPS) qui ne doivent jamais planter sur un etat obsolete.
+    private boolean tourneeActive(Arret arret) {
+        StatutTournee statutTournee = arret.getTournee().getStatut();
+        return statutTournee == StatutTournee.PLANIFIEE || statutTournee == StatutTournee.EN_COURS;
     }
 }

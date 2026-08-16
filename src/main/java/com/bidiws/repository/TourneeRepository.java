@@ -25,4 +25,10 @@ public interface TourneeRepository extends JpaRepository<Tournee, Long> {
 
     boolean existsByIdAndChauffeurId(Long id, Long chauffeurId);
 
+    boolean existsByCamionIdAndStatut(Long camionId, StatutTournee statut);
+
+    boolean existsByChauffeurIdAndStatut(Long chauffeurId, StatutTournee statut);
+
+    boolean existsByZoneId(Long zoneId);
+
 }

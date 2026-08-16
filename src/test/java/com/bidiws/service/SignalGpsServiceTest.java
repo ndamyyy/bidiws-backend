@@ -4,6 +4,7 @@ import com.bidiws.dto.signalgps.SignalGpsRequestDto;
 import com.bidiws.dto.signalgps.SignalGpsResponseDto;
 import com.bidiws.entity.SignalGps;
 import com.bidiws.entity.Tournee;
+import com.bidiws.enums.StatutTournee;
 import com.bidiws.event.PositionGpsEvent;
 import com.bidiws.repository.SignalGpsRepository;
 import com.bidiws.repository.TourneeRepository;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +42,8 @@ class SignalGpsServiceTest {
     private TourneeRepository tourneeRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private GpsProximityDetectionService gpsProximityDetectionService;
 
     @InjectMocks
     private SignalGpsService signalGpsService;
@@ -48,6 +52,10 @@ class SignalGpsServiceTest {
 
     private Tournee tournee() {
         return Tournee.builder().id(TOURNEE_ID).build();
+    }
+
+    private Tournee tournee(StatutTournee statut) {
+        return Tournee.builder().id(TOURNEE_ID).statut(statut).build();
     }
 
     private SignalGps signal(Long id) {
@@ -93,6 +101,29 @@ class SignalGpsServiceTest {
         ArgumentCaptor<PositionGpsEvent> captor = ArgumentCaptor.forClass(PositionGpsEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().tourneeId()).isEqualTo(TOURNEE_ID);
+
+        verify(gpsProximityDetectionService).verifierProximite(
+                TOURNEE_ID, BigDecimal.valueOf(14.71), BigDecimal.valueOf(-17.46));
+    }
+
+    @Test
+    void enregistrerSauvegardeLeSignalMaisIgnoreProximiteEtEventSiLaTourneeEstAnnulee() {
+        SignalGpsRequestDto dto = new SignalGpsRequestDto(
+                TOURNEE_ID, BigDecimal.valueOf(14.71), BigDecimal.valueOf(-17.46),
+                BigDecimal.valueOf(40), null, 5, LocalDateTime.of(2026, 8, 1, 10, 0), null);
+
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee(StatutTournee.ANNULEE)));
+        when(signalGpsRepository.save(any(SignalGps.class))).thenAnswer(inv -> {
+            SignalGps s = inv.getArgument(0);
+            s.setId(99L);
+            return s;
+        });
+
+        SignalGpsResponseDto result = signalGpsService.enregistrer(dto);
+
+        assertThat(result.tourneeId()).isEqualTo(TOURNEE_ID);
+        verify(gpsProximityDetectionService, never()).verifierProximite(any(), any(), any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

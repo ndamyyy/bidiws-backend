@@ -47,7 +47,8 @@ public class TourneeService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Le camion sélectionné est inactif");
         }
 
-        Zone zone = resoudreZone(dto.zoneId());
+        Long villeCamionId = camion.getVille() != null ? camion.getVille().getId() : null;
+        Zone zone = resoudreZone(dto.zoneId(), villeCamionId);
 
         Tournee tournee = Tournee.builder()
                 .dateTournee(dto.dateTournee())
@@ -139,6 +140,13 @@ public class TourneeService {
     // tournee sans zone n'a pas de ville determinable, donc reste invisible. ADMIN
     // et un chauffeur consultant ses propres tournees (deja verifie par
     // @PreAuthorize cote controller) passent sans filtre supplementaire.
+    //
+    // Filtre sur zone.getVille(), pas camion.getVille() : resoudreZone() garantit
+    // desormais camion.ville == zone.ville a la creation (quand les deux sont
+    // renseignes), donc les deux donnent le meme resultat pour les tournees
+    // creees apres ce fix. Une tournee plus ancienne, incoherente, sans validation
+    // a la creation reste filtree sur sa zone comme avant — ne pas changer ce
+    // critere sans revalider ce raisonnement.
     private List<Tournee> filtrerParVille(List<Tournee> tournees, CustomUserDetails userDetails) {
         if (userDetails.getRole() != Role.MAIRIE) {
             return tournees;
@@ -152,12 +160,27 @@ public class TourneeService {
                 .toList();
     }
 
-    private Zone resoudreZone(Long zoneId) {
+    // Meme pattern que ResidenceService.resoudreZone : rejette une zone qui
+    // n'appartient pas a la ville du camion, plutot que de laisser passer une
+    // incoherence qui fausserait ensuite filtrerParVille (fuite cross-tenant).
+    //
+    // villeCamionId peut etre null (Camion.ville est nullable, cf. migration V4) :
+    // dans ce cas on laisse passer sans validation (fail-open), pas de cas
+    // couvert ailleurs dans le projet pour un camion sans ville rattachee — a la
+    // difference du scoping MAIRIE qui est fail-closed.
+    private Zone resoudreZone(Long zoneId, Long villeCamionId) {
         if (zoneId == null) {
             return null;
         }
-        return zoneRepository.findById(zoneId)
+        Zone zone = zoneRepository.findById(zoneId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Zone introuvable"));
+
+        if (villeCamionId != null && !zone.getVille().getId().equals(villeCamionId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cette zone n'appartient pas à la ville du camion sélectionné");
+        }
+
+        return zone;
     }
 
     private TourneeResponseDto toResponseDto(Tournee t) {

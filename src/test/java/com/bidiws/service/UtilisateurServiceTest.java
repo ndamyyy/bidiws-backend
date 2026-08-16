@@ -6,9 +6,13 @@ import com.bidiws.dto.utilisateur.UtilisateurAdminCreateRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurRegisterRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurResponseDto;
 import com.bidiws.dto.utilisateur.UtilisateurUpdateRequestDto;
+import com.bidiws.entity.ChauffeurCamion;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
+import com.bidiws.enums.StatutTournee;
+import com.bidiws.repository.ChauffeurCamionRepository;
+import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.repository.VilleRepository;
 import org.junit.jupiter.api.Test;
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -34,6 +39,10 @@ class UtilisateurServiceTest {
     private UtilisateurRepository utilisateurRepository;
     @Mock
     private VilleRepository villeRepository;
+    @Mock
+    private ChauffeurCamionRepository chauffeurCamionRepository;
+    @Mock
+    private TourneeRepository tourneeRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
 
@@ -170,6 +179,40 @@ class UtilisateurServiceTest {
     }
 
     @Test
+    void setActifEchoueSiLeChauffeurAUneAffectationActive() {
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.CHAUFFEUR)));
+        when(chauffeurCamionRepository.findByChauffeurIdAndDateFinIsNull(UTILISATEUR_ID))
+                .thenReturn(Optional.of(ChauffeurCamion.builder().build()));
+
+        assertThatThrownBy(() -> utilisateurService.setActif(UTILISATEUR_ID, false))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("affectation active ou une tournée en cours");
+    }
+
+    @Test
+    void setActifEchoueSiLeChauffeurAUneTourneeEnCours() {
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.CHAUFFEUR)));
+        when(chauffeurCamionRepository.findByChauffeurIdAndDateFinIsNull(UTILISATEUR_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByChauffeurIdAndStatut(UTILISATEUR_ID, StatutTournee.EN_COURS)).thenReturn(true);
+
+        assertThatThrownBy(() -> utilisateurService.setActif(UTILISATEUR_ID, false))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("affectation active ou une tournée en cours");
+    }
+
+    @Test
+    void setActifDesactiveUnChauffeurSansAffectationNiTourneeEnCours() {
+        Utilisateur u = utilisateur(Role.CHAUFFEUR);
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(u));
+        when(chauffeurCamionRepository.findByChauffeurIdAndDateFinIsNull(UTILISATEUR_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByChauffeurIdAndStatut(UTILISATEUR_ID, StatutTournee.EN_COURS)).thenReturn(false);
+
+        assertThatCode(() -> utilisateurService.setActif(UTILISATEUR_ID, false)).doesNotThrowAnyException();
+
+        assertThat(u.getActif()).isFalse();
+    }
+
+    @Test
     void changerRoleMetAJourLeRole() {
         when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.HABITANT)));
         when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -177,6 +220,40 @@ class UtilisateurServiceTest {
         UtilisateurResponseDto result = utilisateurService.changerRole(UTILISATEUR_ID, Role.GARDIEN);
 
         assertThat(result.role()).isEqualTo(Role.GARDIEN);
+    }
+
+    @Test
+    void changerRoleEchoueSiLeChauffeurAUneAffectationActive() {
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.CHAUFFEUR)));
+        when(chauffeurCamionRepository.findByChauffeurIdAndDateFinIsNull(UTILISATEUR_ID))
+                .thenReturn(Optional.of(ChauffeurCamion.builder().build()));
+
+        assertThatThrownBy(() -> utilisateurService.changerRole(UTILISATEUR_ID, Role.GARDIEN))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("affectation active ou une tournée en cours");
+    }
+
+    @Test
+    void changerRoleEchoueSiLeChauffeurAUneTourneeEnCours() {
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.CHAUFFEUR)));
+        when(chauffeurCamionRepository.findByChauffeurIdAndDateFinIsNull(UTILISATEUR_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByChauffeurIdAndStatut(UTILISATEUR_ID, StatutTournee.EN_COURS)).thenReturn(true);
+
+        assertThatThrownBy(() -> utilisateurService.changerRole(UTILISATEUR_ID, Role.GARDIEN))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("affectation active ou une tournée en cours");
+    }
+
+    @Test
+    void changerRoleVersChauffeurNestJamaisBloquePeuImporteLetat() {
+        // Promotion vers CHAUFFEUR : aucune verification d'affectation/tournee
+        // n'a de sens ici, meme si les repos ne sont pas stubbes (jamais appeles).
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.HABITANT)));
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UtilisateurResponseDto result = utilisateurService.changerRole(UTILISATEUR_ID, Role.CHAUFFEUR);
+
+        assertThat(result.role()).isEqualTo(Role.CHAUFFEUR);
     }
 
     @Test
