@@ -30,6 +30,10 @@ public class CalendrierCollecteService {
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
 
+        if (!Boolean.TRUE.equals(residence.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette résidence est désactivée");
+        }
+
         TypeCollecte typeCollecte = typeCollecteRepository.findById(dto.typeCollecteId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Type de collecte introuvable"));
 

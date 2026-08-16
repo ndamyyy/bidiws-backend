@@ -4,6 +4,7 @@ import com.bidiws.dto.conteneur.ConteneurRequestDto;
 import com.bidiws.dto.conteneur.ConteneurResponseDto;
 import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
+import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceRepository;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -28,6 +30,8 @@ class ConteneurServiceTest {
     private ConteneurRepository conteneurRepository;
     @Mock
     private ResidenceRepository residenceRepository;
+    @Mock
+    private ArretConteneurRepository arretConteneurRepository;
 
     @InjectMocks
     private ConteneurService conteneurService;
@@ -36,7 +40,7 @@ class ConteneurServiceTest {
     private static final Long CONTENEUR_ID = 2L;
 
     private Residence residence() {
-        return Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").build();
+        return Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").actif(true).build();
     }
 
     private Conteneur conteneur() {
@@ -54,6 +58,16 @@ class ConteneurServiceTest {
         assertThatThrownBy(() -> conteneurService.create(dto("023", null)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Résidence introuvable");
+    }
+
+    @Test
+    void createEchoueSiLaResidenceEstDesactivee() {
+        Residence residenceInactive = Residence.builder().id(RESIDENCE_ID).nom("Résidence Test").actif(false).build();
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceInactive));
+
+        assertThatThrownBy(() -> conteneurService.create(dto("023", null)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("résidence est désactivée");
     }
 
     @Test
@@ -114,9 +128,30 @@ class ConteneurServiceTest {
     void desactiverMetActifAFalse() {
         Conteneur c = conteneur();
         when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(c));
+        when(arretConteneurRepository.existsActifByConteneurId(CONTENEUR_ID)).thenReturn(false);
 
         conteneurService.desactiver(CONTENEUR_ID);
 
+        assertThat(c.getActif()).isFalse();
+    }
+
+    @Test
+    void desactiverEchoueSiUneLigneArretConteneurEstEnAttenteSurUneTourneeActive() {
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(conteneur()));
+        when(arretConteneurRepository.existsActifByConteneurId(CONTENEUR_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> conteneurService.desactiver(CONTENEUR_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("arrêt en attente sur une tournée active");
+    }
+
+    @Test
+    void desactiverFonctionneSansArretEnAttenteSurTourneeActive() {
+        Conteneur c = conteneur();
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(c));
+        when(arretConteneurRepository.existsActifByConteneurId(CONTENEUR_ID)).thenReturn(false);
+
+        assertThatCode(() -> conteneurService.desactiver(CONTENEUR_ID)).doesNotThrowAnyException();
         assertThat(c.getActif()).isFalse();
     }
 }

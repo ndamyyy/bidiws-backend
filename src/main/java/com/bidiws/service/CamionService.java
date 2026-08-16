@@ -74,6 +74,21 @@ public class CamionService {
         Ville ville = villeRepository.findById(dto.villeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ville introuvable"));
 
+        // Meme raisonnement que desactiver : changer la ville d'un camion en
+        // service invaliderait retroactivement la coherence deja garantie a
+        // la creation (tournee.zone.ville == camion.ville).
+        boolean villeChangee = camion.getVille() == null || !camion.getVille().getId().equals(dto.villeId());
+        if (villeChangee) {
+            if (chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(id).isPresent()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de changer la ville : un chauffeur est actuellement affecté à ce camion");
+            }
+            if (tourneeRepository.existsByCamionIdAndStatut(id, StatutTournee.EN_COURS)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de changer la ville : ce camion est sur une tournée en cours");
+            }
+        }
+
         camion.setImmatriculation(dto.immatriculation());
         camion.setModele(dto.modele());
         camion.setTypeBenne(dto.typeBenne());

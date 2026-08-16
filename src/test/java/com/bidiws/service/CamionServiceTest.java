@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -119,6 +120,59 @@ class CamionServiceTest {
         assertThatThrownBy(() -> camionService.update(CAMION_ID, dtoPourVille(VILLE_A_ID), mairieVilleB))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("votre ville");
+    }
+
+    @Test
+    void updateEchoueSiChangementDeVilleAvecUneAffectationActive() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionDansVille(VILLE_A_ID)));
+        when(villeRepository.findById(VILLE_B_ID)).thenReturn(Optional.of(Ville.builder().id(VILLE_B_ID).build()));
+        when(chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(CAMION_ID))
+                .thenReturn(Optional.of(com.bidiws.entity.ChauffeurCamion.builder().build()));
+
+        assertThatThrownBy(() -> camionService.update(CAMION_ID, dtoPourVille(VILLE_B_ID), admin))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("chauffeur est actuellement affecté");
+    }
+
+    @Test
+    void updateEchoueSiChangementDeVilleAvecUneTourneeEnCours() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionDansVille(VILLE_A_ID)));
+        when(villeRepository.findById(VILLE_B_ID)).thenReturn(Optional.of(Ville.builder().id(VILLE_B_ID).build()));
+        when(chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(CAMION_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByCamionIdAndStatut(CAMION_ID, StatutTournee.EN_COURS)).thenReturn(true);
+
+        assertThatThrownBy(() -> camionService.update(CAMION_ID, dtoPourVille(VILLE_B_ID), admin))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("tournée en cours");
+    }
+
+    @Test
+    void updateChangeLaVilleSansAffectationNiTourneeEnCours() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionDansVille(VILLE_A_ID)));
+        when(chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(CAMION_ID)).thenReturn(Optional.empty());
+        when(tourneeRepository.existsByCamionIdAndStatut(CAMION_ID, StatutTournee.EN_COURS)).thenReturn(false);
+        when(villeRepository.findById(VILLE_B_ID)).thenReturn(Optional.of(Ville.builder().id(VILLE_B_ID).build()));
+        when(camionRepository.save(any(Camion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CamionResponseDto result = camionService.update(CAMION_ID, dtoPourVille(VILLE_B_ID), admin);
+
+        assertThat(result.villeId()).isEqualTo(VILLE_B_ID);
+    }
+
+    @Test
+    void updateSansChangementDeVilleNeVerifiePasAffectationNiTournee() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionDansVille(VILLE_A_ID)));
+        when(villeRepository.findById(VILLE_A_ID)).thenReturn(Optional.of(Ville.builder().id(VILLE_A_ID).build()));
+        when(camionRepository.save(any(Camion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        camionService.update(CAMION_ID, dtoPourVille(VILLE_A_ID), admin);
+
+        verify(chauffeurCamionRepository, never()).findByCamionIdAndDateFinIsNull(CAMION_ID);
+        verify(tourneeRepository, never()).existsByCamionIdAndStatut(any(), any());
     }
 
     @Test

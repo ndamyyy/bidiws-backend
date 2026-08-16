@@ -45,4 +45,14 @@ public interface ArretRepository extends JpaRepository<Arret, Long> {
 
     boolean existsByIdAndTourneeChauffeurId(Long id, Long chauffeurId);
 
+    // Utilisee par ResidenceService.desactiver : une residence avec un arret
+    // pas encore collecte (EN_ATTENTE/EN_APPROCHE) sur une tournee toujours
+    // active (PLANIFIEE/EN_COURS) est operationnellement en usage, meme
+    // raisonnement que CamionService.desactiver cote camion.
+    @Query("SELECT CASE WHEN COUNT(a) > 0 THEN true ELSE false END FROM Arret a "
+            + "WHERE a.residence.id = :residenceId "
+            + "AND a.statut IN (com.bidiws.enums.StatutArret.EN_ATTENTE, com.bidiws.enums.StatutArret.EN_APPROCHE) "
+            + "AND a.tournee.statut IN (com.bidiws.enums.StatutTournee.PLANIFIEE, com.bidiws.enums.StatutTournee.EN_COURS)")
+    boolean existsActifByResidenceId(@Param("residenceId") Long residenceId);
+
 }

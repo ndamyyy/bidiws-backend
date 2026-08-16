@@ -4,6 +4,7 @@ import com.bidiws.dto.typecollecte.TypeCollecteRequestDto;
 import com.bidiws.dto.typecollecte.TypeCollecteResponseDto;
 import com.bidiws.entity.TypeCollecte;
 import com.bidiws.repository.CalendrierCollecteRepository;
+import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.TypeCollecteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ public class TypeCollecteService {
 
     private final TypeCollecteRepository typeCollecteRepository;
     private final CalendrierCollecteRepository calendrierCollecteRepository;
+    private final TourneeRepository tourneeRepository;
 
     @Transactional
     public TypeCollecteResponseDto create(TypeCollecteRequestDto dto) {
@@ -75,6 +77,11 @@ public class TypeCollecteService {
         if (!calendrierCollecteRepository.findByTypeCollecteId(id).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Impossible de supprimer : ce type de collecte est utilisé dans un calendrier");
+        }
+
+        if (tourneeRepository.existsByTypeCollecteId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de supprimer : ce type de collecte est utilisé par une tournée");
         }
 
         typeCollecteRepository.deleteById(typeCollecte.getId());

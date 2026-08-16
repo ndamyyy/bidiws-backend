@@ -44,11 +44,11 @@ class AppareilIotServiceTest {
     private static final Long CAMION_ID = 3L;
 
     private Conteneur conteneur() {
-        return Conteneur.builder().id(CONTENEUR_ID).code("023").build();
+        return Conteneur.builder().id(CONTENEUR_ID).code("023").actif(true).build();
     }
 
     private Camion camion() {
-        return Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").build();
+        return Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").actif(true).build();
     }
 
     @Test
@@ -88,6 +88,30 @@ class AppareilIotServiceTest {
 
         assertThat(result.cleApi()).isEqualTo("cle-en-clair");
         assertThat(result.identifiantMateriel()).isEqualTo("AA:BB:CC");
+    }
+
+    @Test
+    void createEchoueSiLeConteneurEstInactif() {
+        AppareilIotRequestDto dto = new AppareilIotRequestDto("AA:BB:CC", TypeAppareilIot.CAPTEUR_BENNE, CONTENEUR_ID, null);
+        Conteneur conteneurInactif = Conteneur.builder().id(CONTENEUR_ID).code("023").actif(false).build();
+        when(appareilIotRepository.existsByIdentifiantMateriel("AA:BB:CC")).thenReturn(false);
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(conteneurInactif));
+
+        assertThatThrownBy(() -> appareilIotService.create(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("conteneur inactif");
+    }
+
+    @Test
+    void createEchoueSiLeCamionEstInactif() {
+        AppareilIotRequestDto dto = new AppareilIotRequestDto("READER-1", TypeAppareilIot.LECTEUR_RFID, null, CAMION_ID);
+        Camion camionInactif = Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").actif(false).build();
+        when(appareilIotRepository.existsByIdentifiantMateriel("READER-1")).thenReturn(false);
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionInactif));
+
+        assertThatThrownBy(() -> appareilIotService.create(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("camion inactif");
     }
 
     @Test

@@ -84,11 +84,19 @@ public class AppareilIotService {
         if (conteneurId != null) {
             Conteneur conteneur = conteneurRepository.findById(conteneurId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conteneur introuvable"));
+            if (!Boolean.TRUE.equals(conteneur.getActif())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de rattacher un appareil à un conteneur inactif");
+            }
             appareil.setConteneur(conteneur);
             appareil.setCamion(null);
         } else if (camionId != null) {
             Camion camion = camionRepository.findById(camionId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camion introuvable"));
+            if (!Boolean.TRUE.equals(camion.getActif())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de rattacher un appareil à un camion inactif");
+            }
             appareil.setCamion(camion);
             appareil.setConteneur(null);
         } else {

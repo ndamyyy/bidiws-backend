@@ -31,4 +31,6 @@ public interface TourneeRepository extends JpaRepository<Tournee, Long> {
 
     boolean existsByZoneId(Long zoneId);
 
+    boolean existsByTypeCollecteId(Long typeCollecteId);
+
 }

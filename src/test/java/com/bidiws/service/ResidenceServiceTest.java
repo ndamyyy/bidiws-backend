@@ -5,6 +5,7 @@ import com.bidiws.entity.Residence;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
+import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -21,7 +22,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -42,6 +45,8 @@ class ResidenceServiceTest {
     private ResidenceGardienRepository residenceGardienRepository;
     @Mock
     private ResidenceSyndicRepository residenceSyndicRepository;
+    @Mock
+    private ArretRepository arretRepository;
 
     @InjectMocks
     private ResidenceService residenceService;
@@ -67,6 +72,7 @@ class ResidenceServiceTest {
         return Residence.builder()
                 .id(RESIDENCE_ID)
                 .nom("Résidence Test")
+                .adresse("1 rue Test")
                 .ville(Ville.builder().id(villeId).build())
                 .build();
     }
@@ -181,5 +187,59 @@ class ResidenceServiceTest {
         assertThatThrownBy(() -> residenceService.update(RESIDENCE_ID, dtoPour(VILLE_B_ID), mairieVilleA))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("votre ville");
+    }
+
+    @Test
+    void unSyndicNePeutPasChangerLaVilleDUneResidence() {
+        CustomUserDetails syndic = utilisateur(5L, Role.SYNDIC, null);
+        Residence residenceVilleA = residenceDansVille(VILLE_A_ID);
+
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceVilleA));
+        when(residenceSyndicRepository.existsByResidenceIdAndSyndicId(RESIDENCE_ID, 5L)).thenReturn(true);
+
+        assertThatThrownBy(() -> residenceService.update(RESIDENCE_ID, dtoPour(VILLE_B_ID), syndic))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Un syndic ne peut pas changer la ville");
+    }
+
+    @Test
+    void unSyndicPeutModifierSaResidenceSansChangerLaVille() {
+        CustomUserDetails syndic = utilisateur(5L, Role.SYNDIC, null);
+        Residence residenceVilleA = residenceDansVille(VILLE_A_ID);
+
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceVilleA));
+        when(residenceSyndicRepository.existsByResidenceIdAndSyndicId(RESIDENCE_ID, 5L)).thenReturn(true);
+        when(villeRepository.findById(VILLE_A_ID)).thenReturn(Optional.of(Ville.builder().id(VILLE_A_ID).build()));
+        when(residenceRepository.save(org.mockito.ArgumentMatchers.any(Residence.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatCode(() -> residenceService.update(RESIDENCE_ID, dtoPour(VILLE_A_ID), syndic))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void desactiverEchoueSiUnArretDeCetteResidenceEstSurUneTourneeActive() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        Residence residence = residenceDansVille(VILLE_A_ID);
+
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence));
+        when(arretRepository.existsActifByResidenceId(RESIDENCE_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> residenceService.desactiver(RESIDENCE_ID, admin))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("tournée active");
+    }
+
+    @Test
+    void desactiverFonctionneSansArretActif() {
+        CustomUserDetails admin = utilisateur(1L, Role.ADMIN, null);
+        Residence residence = residenceDansVille(VILLE_A_ID);
+
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence));
+        when(arretRepository.existsActifByResidenceId(RESIDENCE_ID)).thenReturn(false);
+
+        assertThatCode(() -> residenceService.desactiver(RESIDENCE_ID, admin)).doesNotThrowAnyException();
+
+        verify(residenceRepository).save(residence);
     }
 }
