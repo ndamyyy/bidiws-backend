@@ -168,6 +168,20 @@ class UtilisateurServiceTest {
                 .hasMessageContaining("Utilisateur introuvable");
     }
 
+    // Sert de base a GET /utilisateurs/moi (UtilisateurController.moi), qui
+    // delegue directement a getById(userDetails.getId()) sans logique
+    // supplementaire — reutilise le mapping existant, rien a dupliquer.
+    @Test
+    void getByIdRetourneLesInfosDeLUtilisateur() {
+        when(utilisateurRepository.findById(UTILISATEUR_ID)).thenReturn(Optional.of(utilisateur(Role.CHAUFFEUR)));
+
+        UtilisateurResponseDto result = utilisateurService.getById(UTILISATEUR_ID);
+
+        assertThat(result.id()).isEqualTo(UTILISATEUR_ID);
+        assertThat(result.email()).isEqualTo(EMAIL);
+        assertThat(result.role()).isEqualTo(Role.CHAUFFEUR);
+    }
+
     @Test
     void setActifDesactiveLeCompte() {
         Utilisateur u = utilisateur(Role.HABITANT);
