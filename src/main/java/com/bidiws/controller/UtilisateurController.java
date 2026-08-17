@@ -41,6 +41,13 @@ public class UtilisateurController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/moi")
+    public ResponseEntity<UtilisateurResponseDto> moi(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(utilisateurService.getById(userDetails.getId()));
+    }
+
     private void verifierProprietaireOuAdmin(CustomUserDetails userDetails, Long id) {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
