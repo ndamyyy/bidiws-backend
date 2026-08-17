@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +54,7 @@ class TourneeServiceTest {
     private static final Long TYPE_COLLECTE_ID = 2L;
     private static final Long CAMION_ID = 3L;
     private static final Long CHAUFFEUR_ID = 4L;
+    private static final Long AUTRE_CHAUFFEUR_ID = 5L;
     private static final Long VILLE_A_ID = 10L;
     private static final Long VILLE_B_ID = 20L;
     private static final Long ZONE_ID = 30L;
@@ -94,6 +96,17 @@ class TourneeServiceTest {
         Tournee t = tournee(StatutTournee.PLANIFIEE);
         t.setZone(zone);
         return t;
+    }
+
+    private Tournee tourneeAvecChauffeur(Long chauffeurId, Long id) {
+        return Tournee.builder()
+                .id(id)
+                .dateTournee(LocalDate.of(2026, 8, 1))
+                .typeCollecte(typeCollecte())
+                .camion(camionActif())
+                .chauffeur(Utilisateur.builder().id(chauffeurId).role(Role.CHAUFFEUR).actif(true).build())
+                .statut(StatutTournee.PLANIFIEE)
+                .build();
     }
 
     private CustomUserDetails utilisateur(Long id, Role role, Long villeId) {
@@ -312,6 +325,60 @@ class TourneeServiceTest {
                 .thenReturn(List.of(tourneeDansZoneDeVille(VILLE_A_ID), tourneeDansZoneDeVille(VILLE_B_ID)));
 
         assertThat(tourneeService.getByChauffeur(CHAUFFEUR_ID, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null))).hasSize(2);
+    }
+
+    // Fuite confirmee et corrigee : sans filtrerParRole, un CHAUFFEUR (ou
+    // n'importe quel role non-MAIRIE) voyait TOUTES les tournees de TOUS les
+    // chauffeurs et de TOUTES les villes des lors qu'il passait le
+    // @PreAuthorize du controller. Verifie ici sur les 3 methodes.
+
+    @Test
+    void unChauffeurNeVoitQueSesPropresTourneesViaGetAll() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(
+                tourneeAvecChauffeur(CHAUFFEUR_ID, 1L), tourneeAvecChauffeur(AUTRE_CHAUFFEUR_ID, 2L)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).chauffeurId()).isEqualTo(CHAUFFEUR_ID);
+    }
+
+    @Test
+    void unChauffeurNeVoitQueSesPropresTourneesViaGetByDate() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        when(tourneeRepository.findByDateTournee(date)).thenReturn(List.of(
+                tourneeAvecChauffeur(CHAUFFEUR_ID, 1L), tourneeAvecChauffeur(AUTRE_CHAUFFEUR_ID, 2L)));
+
+        List<TourneeResponseDto> result = tourneeService.getByDate(date, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).chauffeurId()).isEqualTo(CHAUFFEUR_ID);
+    }
+
+    @Test
+    void unChauffeurNeVoitQueSesPropresTourneesViaGetByChauffeurMemeSiLeRepoEnRetourneDautres() {
+        // Defense en profondeur : meme si le repository retournait par erreur
+        // des tournees d'un autre chauffeur, filtrerParRole les exclurait quand
+        // meme cote service.
+        when(tourneeRepository.findByChauffeurId(CHAUFFEUR_ID)).thenReturn(List.of(
+                tourneeAvecChauffeur(CHAUFFEUR_ID, 1L), tourneeAvecChauffeur(AUTRE_CHAUFFEUR_ID, 2L)));
+
+        List<TourneeResponseDto> result = tourneeService.getByChauffeur(CHAUFFEUR_ID, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).chauffeurId()).isEqualTo(CHAUFFEUR_ID);
+    }
+
+    @Test
+    void getByDateAndChauffeurCombineLesDeuxFiltresPourUnAdmin() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        when(tourneeRepository.findByChauffeurIdAndDateTournee(CHAUFFEUR_ID, date))
+                .thenReturn(List.of(tourneeAvecChauffeur(CHAUFFEUR_ID, 1L)));
+
+        List<TourneeResponseDto> result = tourneeService.getByDateAndChauffeur(date, CHAUFFEUR_ID, utilisateur(1L, Role.ADMIN, null));
+
+        assertThat(result).hasSize(1);
+        verify(tourneeRepository).findByChauffeurIdAndDateTournee(CHAUFFEUR_ID, date);
     }
 
     @Test

@@ -119,45 +119,63 @@ public class TourneeService {
     }
 
     public List<TourneeResponseDto> getByDate(LocalDate date, CustomUserDetails userDetails) {
-        return filtrerParVille(tourneeRepository.findByDateTournee(date), userDetails).stream()
+        return filtrerParRole(tourneeRepository.findByDateTournee(date), userDetails).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
 
     public List<TourneeResponseDto> getByChauffeur(Long chauffeurId, CustomUserDetails userDetails) {
-        return filtrerParVille(tourneeRepository.findByChauffeurId(chauffeurId), userDetails).stream()
+        return filtrerParRole(tourneeRepository.findByChauffeurId(chauffeurId), userDetails).stream()
+                .map(this::toResponseDto)
+                .toList();
+    }
+
+    // Combine les deux filtres explicites (date ET chauffeur) plutot que de les
+    // traiter en either/or cote controller : un appel avec les deux ensemble
+    // doit vraiment restreindre sur les deux niveaux, pas juste sur l'un des
+    // deux au hasard de l'ordre des if.
+    public List<TourneeResponseDto> getByDateAndChauffeur(LocalDate date, Long chauffeurId, CustomUserDetails userDetails) {
+        return filtrerParRole(tourneeRepository.findByChauffeurIdAndDateTournee(chauffeurId, date), userDetails).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
 
     public List<TourneeResponseDto> getAll(CustomUserDetails userDetails) {
-        return filtrerParVille(tourneeRepository.findAll(), userDetails).stream()
+        return filtrerParRole(tourneeRepository.findAll(), userDetails).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
 
-    // Ne restreint que pour MAIRIE (fail-closed si pas de ville rattachee) : une
-    // tournee sans zone n'a pas de ville determinable, donc reste invisible. ADMIN
-    // et un chauffeur consultant ses propres tournees (deja verifie par
-    // @PreAuthorize cote controller) passent sans filtre supplementaire.
+    // MAIRIE : fail-closed si pas de ville rattachee, une tournee sans zone n'a
+    // pas de ville determinable donc reste invisible. Filtre sur zone.getVille(),
+    // pas camion.getVille() : resoudreZone() garantit desormais camion.ville ==
+    // zone.ville a la creation (quand les deux sont renseignes) — ne pas changer
+    // ce critere sans revalider ce raisonnement.
     //
-    // Filtre sur zone.getVille(), pas camion.getVille() : resoudreZone() garantit
-    // desormais camion.ville == zone.ville a la creation (quand les deux sont
-    // renseignes), donc les deux donnent le meme resultat pour les tournees
-    // creees apres ce fix. Une tournee plus ancienne, incoherente, sans validation
-    // a la creation reste filtree sur sa zone comme avant — ne pas changer ce
-    // critere sans revalider ce raisonnement.
-    private List<Tournee> filtrerParVille(List<Tournee> tournees, CustomUserDetails userDetails) {
-        if (userDetails.getRole() != Role.MAIRIE) {
-            return tournees;
+    // CHAUFFEUR : ne voit que ses propres tournees. Sans ce filtre, un chauffeur
+    // (ou n'importe quel role passant le @PreAuthorize du controller) voyait
+    // TOUTES les tournees de TOUTES les villes/chauffeurs des lors qu'il n'etait
+    // pas MAIRIE — fuite confirmee, corrigee ici.
+    //
+    // ADMIN et tout autre role ayant deja passe le @PreAuthorize cote controller :
+    // non restreint.
+    private List<Tournee> filtrerParRole(List<Tournee> tournees, CustomUserDetails userDetails) {
+        if (userDetails.getRole() == Role.MAIRIE) {
+            if (userDetails.getVilleId() == null) {
+                return List.of();
+            }
+            return tournees.stream()
+                    .filter(t -> t.getZone() != null && t.getZone().getVille() != null
+                            && t.getZone().getVille().getId().equals(userDetails.getVilleId()))
+                    .toList();
         }
-        if (userDetails.getVilleId() == null) {
-            return List.of();
+        if (userDetails.getRole() == Role.CHAUFFEUR) {
+            return tournees.stream()
+                    .filter(t -> t.getChauffeur() != null
+                            && t.getChauffeur().getId().equals(userDetails.getId()))
+                    .toList();
         }
-        return tournees.stream()
-                .filter(t -> t.getZone() != null && t.getZone().getVille() != null
-                        && t.getZone().getVille().getId().equals(userDetails.getVilleId()))
-                .toList();
+        return tournees;
     }
 
     // Meme pattern que ResidenceService.resoudreZone : rejette une zone qui

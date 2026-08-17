@@ -55,12 +55,15 @@ public class TourneeController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') " +
-            "or (#chauffeurId != null and @authorizationService.isSelf(#chauffeurId, authentication))")
+            "or (hasRole('CHAUFFEUR') and #chauffeurId != null and @authorizationService.isSelf(#chauffeurId, authentication))")
     public ResponseEntity<List<TourneeResponseDto>> getAll(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Long chauffeurId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
+        if (date != null && chauffeurId != null) {
+            return ResponseEntity.ok(tourneeService.getByDateAndChauffeur(date, chauffeurId, userDetails));
+        }
         if (date != null) {
             return ResponseEntity.ok(tourneeService.getByDate(date, userDetails));
         }
