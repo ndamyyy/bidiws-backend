@@ -58,7 +58,17 @@ class AppareilIotServiceTest {
 
         assertThatThrownBy(() -> appareilIotService.create(dto))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("à la fois");
+                .hasMessageContaining("pas les deux ni aucun des deux");
+    }
+
+    @Test
+    void createEchoueSiNiConteneurNiCamionFournis() {
+        AppareilIotRequestDto dto = new AppareilIotRequestDto("AA:BB:CC", TypeAppareilIot.CAPTEUR_BENNE, null, null);
+        when(appareilIotRepository.existsByIdentifiantMateriel("AA:BB:CC")).thenReturn(false);
+
+        assertThatThrownBy(() -> appareilIotService.create(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("pas les deux ni aucun des deux");
     }
 
     @Test
