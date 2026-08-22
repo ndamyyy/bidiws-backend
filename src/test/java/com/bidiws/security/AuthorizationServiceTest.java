@@ -4,8 +4,10 @@ import com.bidiws.entity.Arret;
 import com.bidiws.entity.CalendrierCollecte;
 import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
+import com.bidiws.entity.Tournee;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
+import com.bidiws.entity.Zone;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CalendrierCollecteRepository;
@@ -94,6 +96,11 @@ class AuthorizationServiceTest {
         return Arret.builder().residence(residence).build();
     }
 
+    private Tournee tourneeAvecZoneDansVille(Long villeId) {
+        Zone zone = Zone.builder().ville(Ville.builder().id(villeId).build()).build();
+        return Tournee.builder().id(TOURNEE_ID).zone(zone).build();
+    }
+
     private CalendrierCollecte calendrierPourResidence() {
         Residence residence = Residence.builder().id(RESIDENCE_ID).build();
         return CalendrierCollecte.builder().id(CALENDRIER_ID).residence(residence).build();
@@ -143,7 +150,7 @@ class AuthorizationServiceTest {
     @Test
     void uneMairieDeLaVilleConcerneeAAcces() {
         Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_A_ID);
-        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecZoneDansVille(VILLE_A_ID)));
 
         assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairie)).isTrue();
     }
@@ -151,7 +158,7 @@ class AuthorizationServiceTest {
     @Test
     void uneMairieDuneAutreVilleNaPasAcces() {
         Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_B_ID);
-        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecZoneDansVille(VILLE_A_ID)));
 
         assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairie)).isFalse();
     }
@@ -159,13 +166,27 @@ class AuthorizationServiceTest {
     @Test
     void uneMairieSansVilleRattacheeNaAccesAAucuneTournee() {
         Authentication mairieSansVille = authentification(4L, Role.MAIRIE, null);
-        when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of(arretPourResidenceDansVille(VILLE_A_ID)));
 
         assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairieSansVille)).isFalse();
     }
 
+    // Bug confirme en conditions reelles (frontend BIDIWS) : une tournee
+    // flambant neuve (0 arret, ex. juste apres creation par un admin) 403ait
+    // pour la mairie proprietaire sur GET /arrets/tournee/{id} alors qu'elle
+    // apparaissait bien dans son propre GET /tournees — canAccessTournee
+    // faisait passer TOUS les roles non-admin/chauffeur par le rattachement
+    // via arrets, y compris MAIRIE qui a pourtant un lien direct zone/ville
+    // sur la tournee elle-meme, independant des arrets deja poses.
     @Test
-    void aucunArretPourLaTourneeRefuseLAccesAuxRolesNonAdmin() {
+    void uneMairieDeLaVilleConcerneeAAccesMemeSansArret() {
+        Authentication mairie = authentification(4L, Role.MAIRIE, VILLE_A_ID);
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecZoneDansVille(VILLE_A_ID)));
+
+        assertThat(authorizationService.canAccessTournee(TOURNEE_ID, mairie)).isTrue();
+    }
+
+    @Test
+    void aucunArretPourLaTourneeRefuseLAccesAuxRolesNonAdminNonMairie() {
         Authentication syndic = authentification(3L, Role.SYNDIC, null);
         when(arretRepository.findByTourneeId(TOURNEE_ID)).thenReturn(List.of());
 
