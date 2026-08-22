@@ -16,6 +16,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,8 @@ public class TourneeService {
     private final CamionRepository camionRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ZoneRepository zoneRepository;
+    private final ArretRepository arretRepository;
+    private final ResidenceSyndicRepository residenceSyndicRepository;
 
     @Transactional
     public TourneeResponseDto create(TourneeRequestDto dto) {
@@ -157,8 +161,8 @@ public class TourneeService {
     // TOUTES les tournees de TOUTES les villes/chauffeurs des lors qu'il n'etait
     // pas MAIRIE — fuite confirmee, corrigee ici.
     //
-    // ADMIN et tout autre role ayant deja passe le @PreAuthorize cote controller :
-    // non restreint.
+    // ADMIN et tout autre role non liste ci-dessous (deja passe le @PreAuthorize
+    // cote controller) : non restreint.
     private List<Tournee> filtrerParRole(List<Tournee> tournees, CustomUserDetails userDetails) {
         if (userDetails.getRole() == Role.MAIRIE) {
             if (userDetails.getVilleId() == null) {
@@ -173,6 +177,25 @@ public class TourneeService {
             return tournees.stream()
                     .filter(t -> t.getChauffeur() != null
                             && t.getChauffeur().getId().equals(userDetails.getId()))
+                    .toList();
+        }
+        // SYNDIC : aucun lien direct tournee -> syndic, uniquement via les
+        // arrets qui desservent une residence rattachee a ce syndic (meme
+        // raisonnement que AuthorizationService.canAccessTournee, applique ici
+        // a une liste entiere plutot qu'a une tournee unique). Fail-closed :
+        // syndic sans residence rattachee -> aucune tournee visible.
+        if (userDetails.getRole() == Role.SYNDIC) {
+            List<Long> residenceIds = residenceSyndicRepository.findBySyndicId(userDetails.getId()).stream()
+                    .map(rs -> rs.getResidence().getId())
+                    .toList();
+            if (residenceIds.isEmpty()) {
+                return List.of();
+            }
+            Set<Long> tourneeIdsAccessibles = arretRepository.findByResidenceIdIn(residenceIds).stream()
+                    .map(a -> a.getTournee().getId())
+                    .collect(Collectors.toSet());
+            return tournees.stream()
+                    .filter(t -> tourneeIdsAccessibles.contains(t.getId()))
                     .toList();
         }
         return tournees;

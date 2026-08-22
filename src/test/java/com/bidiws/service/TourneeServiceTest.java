@@ -2,7 +2,10 @@ package com.bidiws.service;
 
 import com.bidiws.dto.tournee.TourneeRequestDto;
 import com.bidiws.dto.tournee.TourneeResponseDto;
+import com.bidiws.entity.Arret;
 import com.bidiws.entity.Camion;
+import com.bidiws.entity.Residence;
+import com.bidiws.entity.ResidenceSyndic;
 import com.bidiws.entity.Tournee;
 import com.bidiws.entity.TypeCollecte;
 import com.bidiws.entity.Utilisateur;
@@ -10,7 +13,9 @@ import com.bidiws.entity.Ville;
 import com.bidiws.entity.Zone;
 import com.bidiws.enums.Role;
 import com.bidiws.enums.StatutTournee;
+import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CamionRepository;
+import com.bidiws.repository.ResidenceSyndicRepository;
 import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.TypeCollecteRepository;
 import com.bidiws.repository.UtilisateurRepository;
@@ -46,6 +51,10 @@ class TourneeServiceTest {
     private UtilisateurRepository utilisateurRepository;
     @Mock
     private ZoneRepository zoneRepository;
+    @Mock
+    private ArretRepository arretRepository;
+    @Mock
+    private ResidenceSyndicRepository residenceSyndicRepository;
 
     @InjectMocks
     private TourneeService tourneeService;
@@ -58,6 +67,8 @@ class TourneeServiceTest {
     private static final Long VILLE_A_ID = 10L;
     private static final Long VILLE_B_ID = 20L;
     private static final Long ZONE_ID = 30L;
+    private static final Long SYNDIC_ID = 40L;
+    private static final Long RESIDENCE_ID = 50L;
 
     private TypeCollecte typeCollecte() {
         return TypeCollecte.builder().id(TYPE_COLLECTE_ID).code("OM").libelle("Ordures ménagères").build();
@@ -106,6 +117,21 @@ class TourneeServiceTest {
                 .camion(camionActif())
                 .chauffeur(Utilisateur.builder().id(chauffeurId).role(Role.CHAUFFEUR).actif(true).build())
                 .statut(StatutTournee.PLANIFIEE)
+                .build();
+    }
+
+    private ResidenceSyndic residenceSyndic(Long residenceId) {
+        return ResidenceSyndic.builder()
+                .residence(Residence.builder().id(residenceId).build())
+                .build();
+    }
+
+    private Arret arretDeResidence(Tournee tournee, Long residenceId) {
+        return Arret.builder()
+                .id(1L)
+                .tournee(tournee)
+                .residence(Residence.builder().id(residenceId).build())
+                .ordre((short) 1)
                 .build();
     }
 
@@ -404,5 +430,47 @@ class TourneeServiceTest {
         when(tourneeRepository.findAll()).thenReturn(List.of(tourneeDansZoneDeVille(VILLE_A_ID)));
 
         assertThat(tourneeService.getAll(utilisateur(1L, Role.MAIRIE, null))).isEmpty();
+    }
+
+    // SYNDIC : aucun lien direct tournee -> syndic, uniquement via les arrets
+    // qui desservent une residence rattachee a ce syndic (meme raisonnement que
+    // AuthorizationService.canAccessTournee). Avant ce fix, un SYNDIC tombait
+    // dans la branche "non restreint" de filtrerParRole.
+
+    @Test
+    void unSyndicNeVoitQueLesTourneesDesservantSesResidences() {
+        Tournee tourneeLiee = tourneeAvecChauffeur(CHAUFFEUR_ID, 1L);
+        Tournee tourneeNonLiee = tourneeAvecChauffeur(CHAUFFEUR_ID, 2L);
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeLiee, tourneeNonLiee));
+        when(residenceSyndicRepository.findBySyndicId(SYNDIC_ID)).thenReturn(List.of(residenceSyndic(RESIDENCE_ID)));
+        when(arretRepository.findByResidenceIdIn(List.of(RESIDENCE_ID)))
+                .thenReturn(List.of(arretDeResidence(tourneeLiee, RESIDENCE_ID)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(SYNDIC_ID, Role.SYNDIC, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo(1L);
+    }
+
+    @Test
+    void unSyndicSansResidenceRattacheeNeVoitAucuneTournee() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeAvecChauffeur(CHAUFFEUR_ID, 1L)));
+        when(residenceSyndicRepository.findBySyndicId(SYNDIC_ID)).thenReturn(List.of());
+
+        assertThat(tourneeService.getAll(utilisateur(SYNDIC_ID, Role.SYNDIC, null))).isEmpty();
+    }
+
+    @Test
+    void uneTourneeTouchantUneResidenceNonLieeAuSyndicEstAbsente() {
+        Tournee tourneeLiee = tourneeAvecChauffeur(CHAUFFEUR_ID, 1L);
+        Tournee tourneeAutreResidence = tourneeAvecChauffeur(CHAUFFEUR_ID, 2L);
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeLiee, tourneeAutreResidence));
+        when(residenceSyndicRepository.findBySyndicId(SYNDIC_ID)).thenReturn(List.of(residenceSyndic(RESIDENCE_ID)));
+        when(arretRepository.findByResidenceIdIn(List.of(RESIDENCE_ID)))
+                .thenReturn(List.of(arretDeResidence(tourneeLiee, RESIDENCE_ID)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(SYNDIC_ID, Role.SYNDIC, null));
+
+        assertThat(result).extracting(TourneeResponseDto::id).doesNotContain(2L);
     }
 }
