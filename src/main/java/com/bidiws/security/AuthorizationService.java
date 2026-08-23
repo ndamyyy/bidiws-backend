@@ -8,6 +8,7 @@ import com.bidiws.repository.CalendrierCollecteRepository;
 import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
+import com.bidiws.repository.ResidenceHabitantRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
 import com.bidiws.repository.SignalementRepository;
@@ -27,6 +28,7 @@ public class AuthorizationService {
     private final ArretRepository arretRepository;
     private final SignalementRepository signalementRepository;
     private final ResidenceGardienRepository residenceGardienRepository;
+    private final ResidenceHabitantRepository residenceHabitantRepository;
     private final ResidenceSyndicRepository residenceSyndicRepository;
     private final ResidenceRepository residenceRepository;
     private final CalendrierCollecteRepository calendrierCollecteRepository;
@@ -102,6 +104,12 @@ public class AuthorizationService {
     public boolean isGardienOfResidence(Long residenceId, Authentication authentication) {
         return authentication.getPrincipal() instanceof  CustomUserDetails userDetails && hasAuthority(authentication, "ROLE_GARDIEN" ) && residenceGardienRepository.existsByResidenceIdAndGardienId(residenceId, userDetails.getId());
 
+    }
+
+    public boolean isHabitantOfResidence(Long residenceId, Authentication authentication) {
+        return authentication.getPrincipal() instanceof CustomUserDetails userDetails
+                && hasAuthority(authentication, "ROLE_HABITANT")
+                && residenceHabitantRepository.existsByResidenceIdAndHabitantId(residenceId, userDetails.getId());
     }
 
     public boolean isSyndicOfResidence(Long residenceId, Authentication authentication) {
