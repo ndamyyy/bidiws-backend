@@ -35,6 +35,7 @@ public class SecurityConfig {
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final DeviceApiKeyAuthenticationFilter deviceApiKeyAuthenticationFilter;
+    private final IpRateLimitFilter ipRateLimitFilter;
     private final ObjectMapper objectMapper;
 
     @Value("${bidiws.websocket.allowed-origins}")
@@ -85,7 +86,10 @@ public class SecurityConfig {
                         .accessDeniedHandler(this::handleForbidden)
                 )
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // Avant JwtAuthenticationFilter : une IP bloquee doit etre
+                // rejetee au plus tot, sans meme tenter la validation JWT.
+                .addFilterBefore(ipRateLimitFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

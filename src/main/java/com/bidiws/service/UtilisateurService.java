@@ -28,6 +28,16 @@ public class UtilisateurService {
     private final TourneeRepository tourneeRepository;
     private final PasswordEncoder passwordEncoder;
 
+    // Message volontairement informatif (pas generique type "requete
+    // invalide") : un utilisateur legitime qui retente une inscription doit
+    // comprendre pourquoi ca echoue. Ca permet en theorie l'enumeration
+    // d'emails, mais un message generique degraderait l'UX pour l'usage
+    // normal sans vraiment empecher l'enumeration a petite echelle (un
+    // attaquant patient contourne facilement un message vague en observant
+    // d'autres signaux, ex. temps de reponse). Le vrai frein est le
+    // rate-limit IP partage login+register (IpRateLimitFilter, 20/15min) :
+    // il rend l'enumeration a grande echelle impraticable sans degrader le
+    // message pour un usage normal.
     @Transactional
     public UtilisateurResponseDto register(UtilisateurRegisterRequestDto dto) {
 
