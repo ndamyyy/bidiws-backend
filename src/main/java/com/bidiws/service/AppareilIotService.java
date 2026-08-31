@@ -70,15 +70,17 @@ public class AppareilIotService {
         return toResponseDto(appareilIotRepository.save(appareil));
     }
 
-    // Un appareil ne peut pas etre rattache a la fois a un conteneur et a un
-    // camion (contrainte chk_appareil_iot_un_seul_rattachement en base) :
-    // verifie ici aussi pour renvoyer un message clair plutot qu'une
-    // erreur SQL brute.
+    // Un appareil doit etre rattache a exactement un des deux (conteneur XOR
+    // camion). Le cas "les deux" est aussi bloque par la contrainte
+    // chk_appareil_iot_un_seul_rattachement en base, mais celle-ci n'interdit
+    // pas "aucun des deux" (les deux colonnes sont nullable cote schema) : sans
+    // ce check applicatif, un appareil sans aucun rattachement etait cree
+    // silencieusement, sans erreur DB ni 400.
     private void appliquerRattachement(AppareilIot appareil, Long conteneurId, Long camionId) {
 
-        if (conteneurId != null && camionId != null) {
+        if ((conteneurId == null) == (camionId == null)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Un appareil ne peut pas être rattaché à la fois à un conteneur et à un camion");
+                    "Un appareil doit être rattaché à un conteneur ou un camion, pas les deux ni aucun des deux");
         }
 
         if (conteneurId != null) {
@@ -86,14 +88,11 @@ public class AppareilIotService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conteneur introuvable"));
             appareil.setConteneur(conteneur);
             appareil.setCamion(null);
-        } else if (camionId != null) {
+        } else {
             Camion camion = camionRepository.findById(camionId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camion introuvable"));
             appareil.setCamion(camion);
             appareil.setConteneur(null);
-        } else {
-            appareil.setConteneur(null);
-            appareil.setCamion(null);
         }
     }
 
