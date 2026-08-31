@@ -133,6 +133,28 @@ public class AuthorizationService {
             return tourneeRepository.existsByIdAndChauffeurId(tourneeId, userDetails.getId());
         }
 
+        // MAIRIE : rattachement direct via zone -> ville de la tournee, meme
+        // critere que TourneeService.filtrerParRole — independant des arrets
+        // deja poses. Sans cette branche, une tournee flambant neuve (encore
+        // 0 arret, ex. juste apres creation) 403 pour la mairie proprietaire
+        // jusqu'au premier arret : bug confirme (GET /arrets/tournee/{id} ->
+        // 403 "Acces non autorise" au retour sur la page cote frontend, alors
+        // que la tournee apparaissait bien dans sa propre liste GET /tournees).
+        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
+            Long villeId = userDetails.getVilleId();
+            if (villeId == null) {
+                return false;
+            }
+            return tourneeRepository.findById(tourneeId)
+                    .map(t -> t.getZone() != null && t.getZone().getVille() != null
+                            && villeId.equals(t.getZone().getVille().getId()))
+                    .orElse(false);
+        }
+
+        // SYNDIC/GARDIEN : aucun lien direct tournee -> residence dans ce
+        // modele, seulement via les arrets deja poses — une tournee sans
+        // arret reste donc non verifiable pour ces deux roles (pas corrige
+        // ici, contrairement a MAIRIE qui a un lien zone/ville direct).
         List<Arret> arrets = arretRepository.findByTourneeId(tourneeId);
         if (arrets.isEmpty()) {
             return false;
@@ -145,11 +167,6 @@ public class AuthorizationService {
         if (hasAuthority(authentication, "ROLE_SYNDIC")) {
             return arrets.stream().anyMatch(a ->
                     residenceSyndicRepository.existsByResidenceIdAndSyndicId(a.getResidence().getId(), userDetails.getId()));
-        }
-        if (hasAuthority(authentication, "ROLE_MAIRIE")) {
-            Long villeId = userDetails.getVilleId();
-            return villeId != null && arrets.stream().anyMatch(a ->
-                    a.getResidence().getVille() != null && villeId.equals(a.getResidence().getVille().getId()));
         }
         return false;
     }

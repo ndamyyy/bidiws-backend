@@ -28,6 +28,10 @@ public interface ArretRepository extends JpaRepository<Arret, Long> {
 
     List<Arret> findByResidenceId(Long residenceId);
 
+    // Utilisee pour scoper une LISTE de tournees (TourneeService.filtrerParRole,
+    // cas SYNDIC) : une seule requete plutot qu'un aller-retour par tournee.
+    List<Arret> findByResidenceIdIn(List<Long> residenceIds);
+
     List<Arret> findByStatut(StatutArret statut);
 
     // Utilisee par la detection GPS de proximite : ne remonte que les arrets

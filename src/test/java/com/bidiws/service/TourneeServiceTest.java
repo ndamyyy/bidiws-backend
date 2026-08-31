@@ -2,7 +2,10 @@ package com.bidiws.service;
 
 import com.bidiws.dto.tournee.TourneeRequestDto;
 import com.bidiws.dto.tournee.TourneeResponseDto;
+import com.bidiws.entity.Arret;
 import com.bidiws.entity.Camion;
+import com.bidiws.entity.Residence;
+import com.bidiws.entity.ResidenceSyndic;
 import com.bidiws.entity.Tournee;
 import com.bidiws.entity.TypeCollecte;
 import com.bidiws.entity.Utilisateur;
@@ -10,7 +13,9 @@ import com.bidiws.entity.Ville;
 import com.bidiws.entity.Zone;
 import com.bidiws.enums.Role;
 import com.bidiws.enums.StatutTournee;
+import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.CamionRepository;
+import com.bidiws.repository.ResidenceSyndicRepository;
 import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.TypeCollecteRepository;
 import com.bidiws.repository.UtilisateurRepository;
@@ -30,6 +35,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +51,10 @@ class TourneeServiceTest {
     private UtilisateurRepository utilisateurRepository;
     @Mock
     private ZoneRepository zoneRepository;
+    @Mock
+    private ArretRepository arretRepository;
+    @Mock
+    private ResidenceSyndicRepository residenceSyndicRepository;
 
     @InjectMocks
     private TourneeService tourneeService;
@@ -53,9 +63,12 @@ class TourneeServiceTest {
     private static final Long TYPE_COLLECTE_ID = 2L;
     private static final Long CAMION_ID = 3L;
     private static final Long CHAUFFEUR_ID = 4L;
+    private static final Long AUTRE_CHAUFFEUR_ID = 5L;
     private static final Long VILLE_A_ID = 10L;
     private static final Long VILLE_B_ID = 20L;
     private static final Long ZONE_ID = 30L;
+    private static final Long SYNDIC_ID = 40L;
+    private static final Long RESIDENCE_ID = 50L;
 
     private TypeCollecte typeCollecte() {
         return TypeCollecte.builder().id(TYPE_COLLECTE_ID).code("OM").libelle("Ordures ménagères").build();
@@ -94,6 +107,32 @@ class TourneeServiceTest {
         Tournee t = tournee(StatutTournee.PLANIFIEE);
         t.setZone(zone);
         return t;
+    }
+
+    private Tournee tourneeAvecChauffeur(Long chauffeurId, Long id) {
+        return Tournee.builder()
+                .id(id)
+                .dateTournee(LocalDate.of(2026, 8, 1))
+                .typeCollecte(typeCollecte())
+                .camion(camionActif())
+                .chauffeur(Utilisateur.builder().id(chauffeurId).role(Role.CHAUFFEUR).actif(true).build())
+                .statut(StatutTournee.PLANIFIEE)
+                .build();
+    }
+
+    private ResidenceSyndic residenceSyndic(Long residenceId) {
+        return ResidenceSyndic.builder()
+                .residence(Residence.builder().id(residenceId).build())
+                .build();
+    }
+
+    private Arret arretDeResidence(Tournee tournee, Long residenceId) {
+        return Arret.builder()
+                .id(1L)
+                .tournee(tournee)
+                .residence(Residence.builder().id(residenceId).build())
+                .ordre((short) 1)
+                .build();
     }
 
     private CustomUserDetails utilisateur(Long id, Role role, Long villeId) {
@@ -314,6 +353,60 @@ class TourneeServiceTest {
         assertThat(tourneeService.getByChauffeur(CHAUFFEUR_ID, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null))).hasSize(2);
     }
 
+    // Fuite confirmee et corrigee : sans filtrerParRole, un CHAUFFEUR (ou
+    // n'importe quel role non-MAIRIE) voyait TOUTES les tournees de TOUS les
+    // chauffeurs et de TOUTES les villes des lors qu'il passait le
+    // @PreAuthorize du controller. Verifie ici sur les 3 methodes.
+
+    @Test
+    void unChauffeurNeVoitQueSesPropresTourneesViaGetAll() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(
+                tourneeAvecChauffeur(CHAUFFEUR_ID, 1L), tourneeAvecChauffeur(AUTRE_CHAUFFEUR_ID, 2L)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).chauffeurId()).isEqualTo(CHAUFFEUR_ID);
+    }
+
+    @Test
+    void unChauffeurNeVoitQueSesPropresTourneesViaGetByDate() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        when(tourneeRepository.findByDateTournee(date)).thenReturn(List.of(
+                tourneeAvecChauffeur(CHAUFFEUR_ID, 1L), tourneeAvecChauffeur(AUTRE_CHAUFFEUR_ID, 2L)));
+
+        List<TourneeResponseDto> result = tourneeService.getByDate(date, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).chauffeurId()).isEqualTo(CHAUFFEUR_ID);
+    }
+
+    @Test
+    void unChauffeurNeVoitQueSesPropresTourneesViaGetByChauffeurMemeSiLeRepoEnRetourneDautres() {
+        // Defense en profondeur : meme si le repository retournait par erreur
+        // des tournees d'un autre chauffeur, filtrerParRole les exclurait quand
+        // meme cote service.
+        when(tourneeRepository.findByChauffeurId(CHAUFFEUR_ID)).thenReturn(List.of(
+                tourneeAvecChauffeur(CHAUFFEUR_ID, 1L), tourneeAvecChauffeur(AUTRE_CHAUFFEUR_ID, 2L)));
+
+        List<TourneeResponseDto> result = tourneeService.getByChauffeur(CHAUFFEUR_ID, utilisateur(CHAUFFEUR_ID, Role.CHAUFFEUR, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).chauffeurId()).isEqualTo(CHAUFFEUR_ID);
+    }
+
+    @Test
+    void getByDateAndChauffeurCombineLesDeuxFiltresPourUnAdmin() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        when(tourneeRepository.findByChauffeurIdAndDateTournee(CHAUFFEUR_ID, date))
+                .thenReturn(List.of(tourneeAvecChauffeur(CHAUFFEUR_ID, 1L)));
+
+        List<TourneeResponseDto> result = tourneeService.getByDateAndChauffeur(date, CHAUFFEUR_ID, utilisateur(1L, Role.ADMIN, null));
+
+        assertThat(result).hasSize(1);
+        verify(tourneeRepository).findByChauffeurIdAndDateTournee(CHAUFFEUR_ID, date);
+    }
+
     @Test
     void uneMairieNeVoitQueLesTourneesDeSaVille() {
         when(tourneeRepository.findAll()).thenReturn(List.of(
@@ -337,5 +430,47 @@ class TourneeServiceTest {
         when(tourneeRepository.findAll()).thenReturn(List.of(tourneeDansZoneDeVille(VILLE_A_ID)));
 
         assertThat(tourneeService.getAll(utilisateur(1L, Role.MAIRIE, null))).isEmpty();
+    }
+
+    // SYNDIC : aucun lien direct tournee -> syndic, uniquement via les arrets
+    // qui desservent une residence rattachee a ce syndic (meme raisonnement que
+    // AuthorizationService.canAccessTournee). Avant ce fix, un SYNDIC tombait
+    // dans la branche "non restreint" de filtrerParRole.
+
+    @Test
+    void unSyndicNeVoitQueLesTourneesDesservantSesResidences() {
+        Tournee tourneeLiee = tourneeAvecChauffeur(CHAUFFEUR_ID, 1L);
+        Tournee tourneeNonLiee = tourneeAvecChauffeur(CHAUFFEUR_ID, 2L);
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeLiee, tourneeNonLiee));
+        when(residenceSyndicRepository.findBySyndicId(SYNDIC_ID)).thenReturn(List.of(residenceSyndic(RESIDENCE_ID)));
+        when(arretRepository.findByResidenceIdIn(List.of(RESIDENCE_ID)))
+                .thenReturn(List.of(arretDeResidence(tourneeLiee, RESIDENCE_ID)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(SYNDIC_ID, Role.SYNDIC, null));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo(1L);
+    }
+
+    @Test
+    void unSyndicSansResidenceRattacheeNeVoitAucuneTournee() {
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeAvecChauffeur(CHAUFFEUR_ID, 1L)));
+        when(residenceSyndicRepository.findBySyndicId(SYNDIC_ID)).thenReturn(List.of());
+
+        assertThat(tourneeService.getAll(utilisateur(SYNDIC_ID, Role.SYNDIC, null))).isEmpty();
+    }
+
+    @Test
+    void uneTourneeTouchantUneResidenceNonLieeAuSyndicEstAbsente() {
+        Tournee tourneeLiee = tourneeAvecChauffeur(CHAUFFEUR_ID, 1L);
+        Tournee tourneeAutreResidence = tourneeAvecChauffeur(CHAUFFEUR_ID, 2L);
+        when(tourneeRepository.findAll()).thenReturn(List.of(tourneeLiee, tourneeAutreResidence));
+        when(residenceSyndicRepository.findBySyndicId(SYNDIC_ID)).thenReturn(List.of(residenceSyndic(RESIDENCE_ID)));
+        when(arretRepository.findByResidenceIdIn(List.of(RESIDENCE_ID)))
+                .thenReturn(List.of(arretDeResidence(tourneeLiee, RESIDENCE_ID)));
+
+        List<TourneeResponseDto> result = tourneeService.getAll(utilisateur(SYNDIC_ID, Role.SYNDIC, null));
+
+        assertThat(result).extracting(TourneeResponseDto::id).doesNotContain(2L);
     }
 }
