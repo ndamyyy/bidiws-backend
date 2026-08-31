@@ -14,6 +14,7 @@ import com.bidiws.repository.CalendrierCollecteRepository;
 import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
+import com.bidiws.repository.ResidenceHabitantRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
 import com.bidiws.repository.SignalementRepository;
@@ -50,6 +51,8 @@ class AuthorizationServiceTest {
     private SignalementRepository signalementRepository;
     @Mock
     private ResidenceGardienRepository residenceGardienRepository;
+    @Mock
+    private ResidenceHabitantRepository residenceHabitantRepository;
     @Mock
     private ResidenceSyndicRepository residenceSyndicRepository;
     @Mock
@@ -365,5 +368,27 @@ class AuthorizationServiceTest {
         Authentication admin = authentification(1L, Role.ADMIN, null);
 
         assertThat(authorizationService.canAccessConteneur(CONTENEUR_ID, admin)).isTrue();
+    }
+
+    // ── isHabitantOfResidence ──────────────────────────────────────
+    // Manquait entierement (seul isGardienOfResidence existait) : un
+    // HABITANT consultant le calendrier de sa propre residence via GET
+    // /calendriers-collecte/residence/{id} recevait 403 alors que c'est
+    // precisement ce role qui doit voir cette page (HabitantHomePage).
+
+    @Test
+    void unHabitantDeCetteResidenceAAcces() {
+        Authentication habitant = authentification(7L, Role.HABITANT, null);
+        when(residenceHabitantRepository.existsByResidenceIdAndHabitantId(RESIDENCE_ID, 7L)).thenReturn(true);
+
+        assertThat(authorizationService.isHabitantOfResidence(RESIDENCE_ID, habitant)).isTrue();
+    }
+
+    @Test
+    void unHabitantDuneAutreResidenceNaPasAcces() {
+        Authentication habitant = authentification(7L, Role.HABITANT, null);
+        when(residenceHabitantRepository.existsByResidenceIdAndHabitantId(RESIDENCE_ID, 7L)).thenReturn(false);
+
+        assertThat(authorizationService.isHabitantOfResidence(RESIDENCE_ID, habitant)).isFalse();
     }
 }
