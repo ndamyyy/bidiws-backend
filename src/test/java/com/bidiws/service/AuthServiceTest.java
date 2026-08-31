@@ -4,6 +4,7 @@ import com.bidiws.dto.utilisateur.UtilisateurLoginRequestDto;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.UtilisateurRepository;
+import com.bidiws.security.CustomUserDetails;
 import com.bidiws.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,7 +13,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -103,7 +103,7 @@ class AuthServiceTest {
     void verrouillageExpireDeverrouilleAutomatiquementEtReinitialiseLeCompteur() {
         Utilisateur utilisateur = utilisateur((short) 5, LocalDateTime.now().minusMinutes(1));
         when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
-        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("un-token");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-token");
 
         String token = authService.login(dto());
 
@@ -117,7 +117,7 @@ class AuthServiceTest {
     void loginReussiReinitialiseLeCompteurMemeApresDesEchecsPrecedents() {
         Utilisateur utilisateur = utilisateur((short) 3, null);
         when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
-        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("un-token");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-token");
 
         String token = authService.login(dto());
 
@@ -130,7 +130,7 @@ class AuthServiceTest {
     void loginReussiSansEchecsPrealablesNeDeclencheAucuneSauvegardeInutile() {
         Utilisateur utilisateur = utilisateur((short) 0, null);
         when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
-        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("un-token");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-token");
 
         authService.login(dto());
 

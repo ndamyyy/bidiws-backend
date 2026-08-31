@@ -5,7 +5,6 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -18,6 +17,12 @@ import java.util.function.Function;
  * Génération et validation des tokens JWT.
  * Clé et durée de validité pilotées par application.properties
  * (bidiws.jwt.secret / bidiws.jwt.expiration).
+ *
+ * Le sujet du token est l'ID utilisateur, pas l'email : l'email peut
+ * changer (ProfilPage) alors qu'un token deja emis reste valide jusqu'a
+ * expiration — un sujet base sur l'email rendrait ce token orphelin
+ * (loadUserByUsername(ancienEmail) echoue) des le changement, tuant la
+ * session en cours silencieusement. L'ID ne change jamais.
  */
 @Service
 public class JwtService {
@@ -33,31 +38,31 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
-    public String generateToken(UserDetails userDetails) {
+    public String generateToken(CustomUserDetails userDetails) {
         return generateToken(new HashMap<>(), userDetails);
     }
 
-    public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+    public String generateToken(Map<String, Object> extraClaims, CustomUserDetails userDetails) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .claims(extraClaims)
-                .subject(userDetails.getUsername())
+                .subject(String.valueOf(userDetails.getId()))
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey)
                 .compact();
     }
 
-    public String extractEmail(String token) {
-        return extractClaim(token, Claims::getSubject);
+    public Long extractUserId(String token) {
+        return Long.valueOf(extractClaim(token, Claims::getSubject));
     }
 
-    public boolean isTokenValid(String token, UserDetails userDetails) {
+    public boolean isTokenValid(String token, CustomUserDetails userDetails) {
         try {
-            final String email = extractEmail(token);
-            return email.equals(userDetails.getUsername()) && !isTokenExpired(token);
+            final Long userId = extractUserId(token);
+            return userId.equals(userDetails.getId()) && !isTokenExpired(token);
         } catch (ExpiredJwtException e) {
             return false;
         }
