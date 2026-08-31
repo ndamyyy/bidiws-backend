@@ -4,6 +4,7 @@ import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.dto.residence.ResidenceResponseDto;
 import com.bidiws.entity.*;
 import com.bidiws.enums.Role;
+import com.bidiws.repository.ArretRepository;
 import com.bidiws.repository.ResidenceGardienRepository;
 import com.bidiws.repository.ResidenceRepository;
 import com.bidiws.repository.ResidenceSyndicRepository;
@@ -27,6 +28,7 @@ public class ResidenceService {
     private final ZoneRepository zoneRepository;
     private final ResidenceGardienRepository residenceGardienRepository;
     private final ResidenceSyndicRepository residenceSyndicRepository;
+    private final ArretRepository arretRepository;
 
     @Transactional
     public ResidenceResponseDto create(ResidenceRequestDto dto, CustomUserDetails userDetails) {
@@ -116,6 +118,10 @@ public class ResidenceService {
             case SYNDIC -> {
                 if (!residenceSyndicRepository.existsByResidenceIdAndSyndicId(residence.getId(), userDetails.getId())) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vous ne gérez pas cette résidence");
+                }
+                if (!residence.getVille().getId().equals(villeIdCible)) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "Un syndic ne peut pas changer la ville d'une résidence");
                 }
             }
             default -> throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
@@ -223,6 +229,11 @@ public class ResidenceService {
 
         if (!autorise) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès non autorisé");
+        }
+
+        if (arretRepository.existsActifByResidenceId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de désactiver : un arrêt de cette résidence est sur une tournée active");
         }
 
         residence.setActif(false);

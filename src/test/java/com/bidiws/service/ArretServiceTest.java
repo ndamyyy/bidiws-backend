@@ -146,6 +146,19 @@ class ArretServiceTest {
     }
 
     @Test
+    void creerEchoueSiLaResidenceEstDesactivee() {
+        ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
+        Residence residenceInactive = Residence.builder().id(RESIDENCE_ID).nom("Résidence Test")
+                .ville(Ville.builder().id(VILLE_A_ID).build()).actif(false).build();
+        when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tournee()));
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residenceInactive));
+
+        assertThatThrownBy(() -> arretService.creer(dto))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("résidence est désactivée");
+    }
+
+    @Test
     void creerAccepteUneResidenceDeLaMemeVilleQueLeCamion() {
         ArretRequestDto dto = new ArretRequestDto(TOURNEE_ID, RESIDENCE_ID, 1, null, null);
         when(tourneeRepository.findById(TOURNEE_ID)).thenReturn(Optional.of(tourneeAvecCamionDeVille(VILLE_A_ID)));

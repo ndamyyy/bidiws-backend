@@ -52,6 +52,10 @@ public class ArretService {
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
 
+        if (!Boolean.TRUE.equals(residence.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette résidence est désactivée");
+        }
+
         // Meme raisonnement fail-open que TourneeService.resoudreZone : le camion
         // peut ne pas avoir de ville assignee (nullable, migration V4), auquel cas
         // rien a valider plutot qu'un NPE. Sinon, contourne directement l'isolation

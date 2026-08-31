@@ -32,6 +32,10 @@ public class ResidenceSyndicService {
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
 
+        if (!Boolean.TRUE.equals(residence.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette résidence est désactivée");
+        }
+
         Utilisateur syndic = utilisateurRepository.findById(dto.syndicId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Syndic introuvable"));
 

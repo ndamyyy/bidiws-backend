@@ -48,7 +48,7 @@ class ChauffeurCamionServiceTest {
     }
 
     private Camion camion() {
-        return Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").build();
+        return Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").actif(true).build();
     }
 
     private ChauffeurCamionRequestDto dto() {
@@ -72,6 +72,17 @@ class ChauffeurCamionServiceTest {
         assertThatThrownBy(() -> chauffeurCamionService.affecter(dto()))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("pas un chauffeur actif");
+    }
+
+    @Test
+    void affecterEchoueSiLeCamionEstInactif() {
+        Camion camionInactif = Camion.builder().id(CAMION_ID).immatriculation("AB-123-CD").actif(false).build();
+        when(utilisateurRepository.findById(CHAUFFEUR_ID)).thenReturn(Optional.of(chauffeurActif(CHAUFFEUR_ID)));
+        when(camionRepository.findById(CAMION_ID)).thenReturn(Optional.of(camionInactif));
+
+        assertThatThrownBy(() -> chauffeurCamionService.affecter(dto()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("camion sélectionné est inactif");
     }
 
     @Test

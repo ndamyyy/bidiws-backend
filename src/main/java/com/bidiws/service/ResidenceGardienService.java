@@ -32,6 +32,10 @@ public class ResidenceGardienService {
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
 
+        if (!Boolean.TRUE.equals(residence.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette résidence est désactivée");
+        }
+
         Utilisateur gardien = utilisateurRepository.findById(dto.gardienId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gardien introuvable"));
 

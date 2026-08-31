@@ -4,6 +4,7 @@ import com.bidiws.dto.conteneur.ConteneurRequestDto;
 import com.bidiws.dto.conteneur.ConteneurResponseDto;
 import com.bidiws.entity.Conteneur;
 import com.bidiws.entity.Residence;
+import com.bidiws.repository.ArretConteneurRepository;
 import com.bidiws.repository.ConteneurRepository;
 import com.bidiws.repository.ResidenceRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +21,17 @@ public class ConteneurService {
 
     private final ConteneurRepository conteneurRepository;
     private final ResidenceRepository residenceRepository;
+    private final ArretConteneurRepository arretConteneurRepository;
 
     @Transactional
     public ConteneurResponseDto create(ConteneurRequestDto dto) {
 
         Residence residence = residenceRepository.findById(dto.residenceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
+
+        if (!Boolean.TRUE.equals(residence.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette résidence est désactivée");
+        }
 
         if (conteneurRepository.existsByResidenceIdAndCode(dto.residenceId(), dto.code())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -81,6 +87,12 @@ public class ConteneurService {
     public void desactiver(Long id) {
         Conteneur conteneur = conteneurRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conteneur introuvable"));
+
+        if (arretConteneurRepository.existsActifByConteneurId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de désactiver : ce conteneur a un arrêt en attente sur une tournée active");
+        }
+
         conteneur.setActif(false);
         conteneurRepository.save(conteneur);
     }

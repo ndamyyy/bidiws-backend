@@ -59,6 +59,22 @@ public class ZoneService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ce code de zone existe déjà pour cette ville");
         }
 
+        // Changer le nom/code/description d'une zone reste libre ; seul le
+        // changement DE VILLE d'une zone deja utilisee est bloque, sinon
+        // TourneeService.filtrerParVille fait apparaitre ces tournees sous la
+        // mauvaise mairie sans que rien n'ait vraiment bouge cote metier.
+        boolean villeChangee = !zone.getVille().getId().equals(dto.villeId());
+        if (villeChangee) {
+            if (!residenceRepository.findByZoneId(id).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de changer la ville : des résidences sont rattachées à cette zone");
+            }
+            if (tourneeRepository.existsByZoneId(id)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de changer la ville : des tournées sont rattachées à cette zone");
+            }
+        }
+
         zone.setVille(ville);
         zone.setNom(dto.nom());
         zone.setCode(dto.code());

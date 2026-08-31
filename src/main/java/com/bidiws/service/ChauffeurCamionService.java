@@ -40,6 +40,10 @@ public class ChauffeurCamionService {
         Camion camion = camionRepository.findById(dto.camionId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Camion introuvable"));
 
+        if (!Boolean.TRUE.equals(camion.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Le camion sélectionné est inactif");
+        }
+
         if (chauffeurCamionRepository.findByCamionIdAndDateFinIsNull(dto.camionId()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Ce camion a déjà un chauffeur actuellement affecté");
