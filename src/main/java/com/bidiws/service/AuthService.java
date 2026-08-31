@@ -3,13 +3,13 @@ package com.bidiws.service;
 import com.bidiws.dto.utilisateur.UtilisateurLoginRequestDto;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.repository.UtilisateurRepository;
+import com.bidiws.security.CustomUserDetails;
 import com.bidiws.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -58,13 +58,9 @@ public class AuthService {
 
         reinitialiserEchecs(utilisateur);
 
-        UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
-                .username(utilisateur.getEmail())
-                .password(utilisateur.getMotDePasse())
-                .authorities("ROLE_" + utilisateur.getRole().name())
-                .build();
-
-        return jwtService.generateToken(userDetails);
+        // CustomUserDetails (pas un User Spring generique) : JwtService pose
+        // desormais l'ID comme sujet du token, pas l'email — voir JwtService.
+        return jwtService.generateToken(new CustomUserDetails(utilisateur));
     }
 
     // Un compte verrouille le reste meme avec le bon mot de passe, jusqu'a

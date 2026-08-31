@@ -10,7 +10,6 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -62,8 +61,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
 
         try {
-            String email = jwtService.extractEmail(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            Long userId = jwtService.extractUserId(token);
+            CustomUserDetails userDetails = userDetailsService.loadUserById(userId);
 
             if (!userDetails.isEnabled() || !jwtService.isTokenValid(token, userDetails)) {
                 throw new StompAuthenticationException("Token JWT invalide");
