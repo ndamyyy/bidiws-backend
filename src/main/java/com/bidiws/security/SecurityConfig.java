@@ -37,8 +37,14 @@ public class SecurityConfig {
     private final DeviceApiKeyAuthenticationFilter deviceApiKeyAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
+    // List<String>, pas String : bidiws.websocket.allowed-origins contient
+    // plusieurs origines separees par des virgules. Spring convertit
+    // nativement une propriete a virgules en List<String> pour un champ
+    // @Value ainsi type — mal type en String, la valeur entiere (virgules
+    // comprises) finissait comme un unique element de List.of(...), qui ne
+    // peut matcher aucun Origin reel envoye par un navigateur.
     @Value("${bidiws.websocket.allowed-origins}")
-    private String allowedOrigin;
+    private List<String> allowedOrigins;
 
     private static final String[] PUBLIC_ROUTES = {
             "/auth/login",
@@ -135,7 +141,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(allowedOrigin));
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
