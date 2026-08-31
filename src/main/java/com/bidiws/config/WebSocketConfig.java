@@ -11,6 +11,8 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.List;
+
 /**
  * /topic  : diffusion large (ex: statut/position d'une tournee suivie par plusieurs abonnes)
  * /queue  : messages cibles a un utilisateur (ex: notification personnelle via convertAndSendToUser)
@@ -25,13 +27,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
     private final JwtHandshakeInterceptor jwtHandshakeInterceptor;
 
+    // List<String>, pas String : voir le meme commentaire dans SecurityConfig.
+    // setAllowedOrigins(String...) traitait auparavant la valeur entiere
+    // (virgules comprises) comme une seule origine, qui ne peut jamais
+    // matcher un Origin reel envoye par le navigateur lors du handshake.
     @Value("${bidiws.websocket.allowed-origins}")
-    private String allowedOrigin;
+    private List<String> allowedOrigins;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(allowedOrigin)
+                .setAllowedOrigins(allowedOrigins.toArray(new String[0]))
                 .addInterceptors(jwtHandshakeInterceptor)
                 .withSockJS();
     }
