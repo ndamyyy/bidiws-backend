@@ -1,0 +1,75 @@
+package com.bidiws.controller;
+
+import com.bidiws.dto.arret.ArretConteneurResponseDto;
+import com.bidiws.dto.arret.ArretIncidentRequestDto;
+import com.bidiws.dto.arret.ArretRequestDto;
+import com.bidiws.dto.arret.ArretResponseDto;
+import com.bidiws.enums.StatutArret;
+import com.bidiws.service.ArretService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/arrets")
+@RequiredArgsConstructor
+public class ArretController {
+
+    private final ArretService arretService;
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")
+    public ResponseEntity<ArretResponseDto> creer(@Valid @RequestBody ArretRequestDto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(arretService.creer(dto));
+    }
+
+    @PatchMapping("/{id}/statut")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeurForArret(#id, authentication)")
+    public ResponseEntity<ArretResponseDto> changerStatut(
+            @PathVariable Long id,
+            @RequestParam StatutArret statut
+    ) {
+        return ResponseEntity.ok(arretService.changerStatut(id, statut));
+    }
+
+    @PatchMapping("/{id}/incident")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE') or @authorizationService.isAssignedChauffeurForArret(#id, authentication)")
+    public ResponseEntity<ArretResponseDto> signalerIncident(
+            @PathVariable Long id,
+            @Valid @RequestBody ArretIncidentRequestDto dto
+    ) {
+        return ResponseEntity.ok(arretService.signalerIncident(id, dto));
+    }
+
+
+    @GetMapping("/{id}")
+    @PreAuthorize("@authorizationService.canAccessArret(#id, authentication)")
+    public ResponseEntity<ArretResponseDto> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(arretService.getById(id));
+    }
+
+    @GetMapping("/{id}/conteneurs")
+    @PreAuthorize("@authorizationService.canAccessArret(#id, authentication)")
+    public ResponseEntity<List<ArretConteneurResponseDto>> getConteneurs(@PathVariable Long id) {
+        return ResponseEntity.ok(arretService.getConteneurs(id));
+    }
+
+    @GetMapping("/tournee/{tourneeId}")
+    @PreAuthorize("@authorizationService.canAccessTournee(#tourneeId, authentication)")
+    public ResponseEntity<List<ArretResponseDto>> getByTournee(@PathVariable Long tourneeId) {
+        return ResponseEntity.ok(arretService.getByTournee(tourneeId));
+    }
+
+    @GetMapping("/residence/{residenceId}")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isSyndicOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isGardienOfResidence(#residenceId, authentication)")
+    public ResponseEntity<List<ArretResponseDto>> getByResidence(@PathVariable Long residenceId) {
+        return ResponseEntity.ok(arretService.getByResidence(residenceId));
+    }
+}

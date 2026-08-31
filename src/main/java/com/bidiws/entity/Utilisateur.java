@@ -4,6 +4,8 @@ import com.bidiws.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name= "utilisateur")
 @Getter
@@ -40,5 +42,20 @@ public class Utilisateur extends Auditable{
         @Builder.Default
         private Boolean actif = true;
 
+        // Rattachement utilise uniquement pour le role MAIRIE : delimite la
+        // ville dont cette mairie peut voir/gerer les residences.
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(name = "ville_id")
+        private Ville ville;
+
+        // Verrouillage de compte apres echecs de connexion successifs
+        // (cf. AuthService). Defaut coherent aussi cote Java, pas seulement
+        // la contrainte SQL DEFAULT 0.
+        @Column(name = "tentatives_echouees", nullable = false)
+        @Builder.Default
+        private Short tentativesEchouees = 0;
+
+        @Column(name = "verrouille_jusqua")
+        private LocalDateTime verrouilleJusqua;
 
 }
