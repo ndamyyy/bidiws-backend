@@ -146,6 +146,14 @@
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
         </dependency>
+
+        <!-- FCM — notifications push reelles (app fermee/arriere-plan),
+             en complement du WebSocket (app ouverte au premier plan) -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.4.1</version>
+        </dependency>
 	</dependencies>
 
 	<build>
