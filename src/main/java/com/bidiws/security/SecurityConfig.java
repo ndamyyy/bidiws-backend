@@ -50,6 +50,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ROUTES = {
             "/auth/login",
             "/auth/register",
+            "/auth/refresh",
             "/error",
             "/ws/**"
     };

@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Génération et validation des tokens JWT.
+ * Génération et validation des ACCESS tokens JWT (courte duree — voir
+ * RefreshTokenService pour le refresh token longue duree, stocke en base,
+ * pas un JWT).
  * Clé et durée de validité pilotées par application.properties
  * (bidiws.jwt.secret / bidiws.jwt.expiration).
  *
@@ -32,7 +34,9 @@ public class JwtService {
 
     public JwtService(
             @Value("${bidiws.jwt.secret}") String secret,
-            @Value("${bidiws.jwt.expiration}") long expirationMs
+            // Repli 30 min : access token volontairement court (voir
+            // RefreshTokenService pour la duree longue, cote refresh).
+            @Value("${bidiws.jwt.expiration:1800000}") long expirationMs
     ) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.expirationMs = expirationMs;
