@@ -59,6 +59,44 @@ public class ResidenceHabitantService {
         residenceHabitantRepository.deleteByResidenceIdAndHabitantId(residenceId, habitantId);
     }
 
+    // Deplace un habitant vers une nouvelle residence (demenagement) en
+    // retirant d'abord tout lien existant, plutot que d'en ajouter un
+    // second a cote : un habitant ne doit jamais se retrouver rattache a
+    // deux residences actives simultanement. defensif sur liensExistants
+    // (normalement au plus un) pour nettoyer aussi une anomalie prealable.
+    @Transactional
+    public ResidenceHabitantResponseDto changerResidence(ResidenceHabitantRequestDto dto) {
+
+        Residence residence = residenceRepository.findById(dto.residenceId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Résidence introuvable"));
+
+        if (!Boolean.TRUE.equals(residence.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette résidence est désactivée");
+        }
+
+        Utilisateur habitant = utilisateurRepository.findById(dto.habitantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Habitant introuvable"));
+
+        if (habitant.getRole() != Role.HABITANT || !Boolean.TRUE.equals(habitant.getActif())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "L'utilisateur sélectionné n'est pas un habitant actif");
+        }
+
+        List<ResidenceHabitant> liensExistants = residenceHabitantRepository.findByHabitantId(dto.habitantId());
+        if (!liensExistants.isEmpty()) {
+            residenceHabitantRepository.deleteAll(liensExistants);
+        }
+
+        ResidenceHabitantId id = new ResidenceHabitantId(dto.residenceId(), dto.habitantId());
+
+        ResidenceHabitant residenceHabitant = ResidenceHabitant.builder()
+                .residenceHabitantId(id)
+                .residence(residence)
+                .habitant(habitant)
+                .build();
+
+        return toResponseDto(residenceHabitantRepository.save(residenceHabitant));
+    }
+
     public List<ResidenceHabitantResponseDto> getByResidence(Long residenceId) {
         return residenceHabitantRepository.findByResidenceId(residenceId).stream()
                 .map(this::toResponseDto)
