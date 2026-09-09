@@ -4,6 +4,7 @@ import com.bidiws.dto.residencehabitant.ResidenceHabitantRequestDto;
 import com.bidiws.dto.residencehabitant.ResidenceHabitantResponseDto;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.ResidenceHabitant;
+import com.bidiws.entity.ResidenceHabitantId;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.ResidenceHabitantRepository;
@@ -16,11 +17,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,5 +75,61 @@ class ResidenceHabitantServiceTest {
 
         assertThat(result.residenceId()).isEqualTo(RESIDENCE_ID);
         assertThat(result.habitantId()).isEqualTo(HABITANT_ID);
+    }
+
+    // ── changerResidence (déménagement) ──
+
+    private static final Long ANCIENNE_RESIDENCE_ID = 9L;
+
+    private ResidenceHabitant lienExistant() {
+        Residence ancienne = Residence.builder().id(ANCIENNE_RESIDENCE_ID).nom("Ancienne résidence").actif(true).build();
+        return ResidenceHabitant.builder()
+                .residenceHabitantId(new ResidenceHabitantId(ANCIENNE_RESIDENCE_ID, HABITANT_ID))
+                .residence(ancienne)
+                .habitant(habitantActif())
+                .build();
+    }
+
+    @Test
+    void changerResidenceEchoueSiLaNouvelleResidenceEstDesactivee() {
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence(false)));
+
+        assertThatThrownBy(() -> residenceHabitantService.changerResidence(dto()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("résidence est désactivée");
+
+        verify(residenceHabitantRepository, never()).deleteAll(any());
+        verify(residenceHabitantRepository, never()).save(any());
+    }
+
+    @Test
+    void changerResidenceRetireLAncienLienAvantDenPoserUnNouveau() {
+        List<ResidenceHabitant> liensExistants = List.of(lienExistant());
+
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence(true)));
+        when(utilisateurRepository.findById(HABITANT_ID)).thenReturn(Optional.of(habitantActif()));
+        when(residenceHabitantRepository.findByHabitantId(HABITANT_ID)).thenReturn(liensExistants);
+        when(residenceHabitantRepository.save(any(ResidenceHabitant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ResidenceHabitantResponseDto result = residenceHabitantService.changerResidence(dto());
+
+        // L'ancien lien est bien retiré (pas seulement un nouveau ajouté à
+        // côté) — un habitant ne doit jamais se retrouver rattaché à deux
+        // résidences actives en même temps.
+        verify(residenceHabitantRepository, times(1)).deleteAll(liensExistants);
+        assertThat(result.residenceId()).isEqualTo(RESIDENCE_ID);
+        assertThat(result.habitantId()).isEqualTo(HABITANT_ID);
+    }
+
+    @Test
+    void changerResidenceSansLienExistantNAppellePasDeleteAll() {
+        when(residenceRepository.findById(RESIDENCE_ID)).thenReturn(Optional.of(residence(true)));
+        when(utilisateurRepository.findById(HABITANT_ID)).thenReturn(Optional.of(habitantActif()));
+        when(residenceHabitantRepository.findByHabitantId(HABITANT_ID)).thenReturn(List.of());
+        when(residenceHabitantRepository.save(any(ResidenceHabitant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        residenceHabitantService.changerResidence(dto());
+
+        verify(residenceHabitantRepository, never()).deleteAll(any());
     }
 }

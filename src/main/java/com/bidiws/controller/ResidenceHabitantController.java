@@ -27,6 +27,18 @@ public class ResidenceHabitantController {
         return ResponseEntity.status(HttpStatus.CREATED).body(residenceHabitantService.affecter(dto));
     }
 
+    // Demenagement : deplace l'habitant vers dto.residenceId() en retirant
+    // d'abord tout lien existant (voir ResidenceHabitantService.changerResidence)
+    // — pas un simple ajout a cote de l'ancien lien. Autorisation verifiee sur
+    // la residence de DESTINATION (celle que l'appelant gere).
+    @PutMapping
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#dto.residenceId(), authentication) " +
+            "or @authorizationService.isSyndicOfResidence(#dto.residenceId(), authentication) " +
+            "or @authorizationService.isGardienOfResidence(#dto.residenceId(), authentication)")
+    public ResponseEntity<ResidenceHabitantResponseDto> changerResidence(@Valid @RequestBody ResidenceHabitantRequestDto dto) {
+        return ResponseEntity.ok(residenceHabitantService.changerResidence(dto));
+    }
+
     @DeleteMapping
     @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#residenceId, authentication) " +
             "or @authorizationService.isSyndicOfResidence(#residenceId, authentication) " +
