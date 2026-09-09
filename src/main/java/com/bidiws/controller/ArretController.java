@@ -65,10 +65,15 @@ public class ArretController {
         return ResponseEntity.ok(arretService.getByTournee(tourneeId));
     }
 
+    // Ouvert aussi au habitant de la residence (isHabitantOfResidence,
+    // meme pattern que CalendrierCollecteController) : necessaire pour
+    // que HabitantHomePage puisse afficher le statut du jour, pas
+    // seulement le calendrier recurrent.
     @GetMapping("/residence/{residenceId}")
     @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#residenceId, authentication) " +
             "or @authorizationService.isSyndicOfResidence(#residenceId, authentication) " +
-            "or @authorizationService.isGardienOfResidence(#residenceId, authentication)")
+            "or @authorizationService.isGardienOfResidence(#residenceId, authentication) " +
+            "or @authorizationService.isHabitantOfResidence(#residenceId, authentication)")
     public ResponseEntity<List<ArretResponseDto>> getByResidence(@PathVariable Long residenceId) {
         return ResponseEntity.ok(arretService.getByResidence(residenceId));
     }
