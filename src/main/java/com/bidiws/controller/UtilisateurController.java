@@ -20,11 +20,6 @@ public class UtilisateurController {
 
     private final UtilisateurService utilisateurService;
 
-    @GetMapping("/moi")
-    public ResponseEntity<UtilisateurResponseDto> moi(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(utilisateurService.getById(userDetails.getId()));
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<UtilisateurResponseDto> update(
             @AuthenticationPrincipal CustomUserDetails userDetails,
