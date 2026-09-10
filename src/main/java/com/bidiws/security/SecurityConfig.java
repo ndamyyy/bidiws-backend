@@ -51,7 +51,8 @@ public class SecurityConfig {
             "/auth/login",
             "/auth/register",
             "/error",
-            "/ws/**"
+            "/ws/**",
+            "/files/**"
     };
 
     // Chaine dediee aux appareils IoT : cle API (X-Device-Api-Key), pas de
