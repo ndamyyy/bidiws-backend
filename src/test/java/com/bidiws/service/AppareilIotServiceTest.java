@@ -1,6 +1,7 @@
 package com.bidiws.service;
 
 import com.bidiws.dto.appareiliot.AppareilIotCreeResponseDto;
+import com.bidiws.dto.appareiliot.AppareilIotImportResultatDto;
 import com.bidiws.dto.appareiliot.AppareilIotRequestDto;
 import com.bidiws.entity.AppareilIot;
 import com.bidiws.entity.Camion;
@@ -15,8 +16,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,6 +151,66 @@ class AppareilIotServiceTest {
         AppareilIotCreeResponseDto result = appareilIotService.create(dto);
 
         assertThat(result.identifiantMateriel()).isEqualTo("READER-1");
+    }
+
+    // ── importerCsv ──
+
+    private MultipartFile csv(String contenu) {
+        return new MockMultipartFile("file", "appareils.csv", "text/csv",
+                contenu.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void importerCsvEchoueSiLeFichierEstVide() {
+        MultipartFile vide = new MockMultipartFile("file", "appareils.csv", "text/csv", new byte[0]);
+
+        assertThatThrownBy(() -> appareilIotService.importerCsv(vide))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("vide");
+    }
+
+    @Test
+    void importerCsvSansLigneDeDonneesRenvoieDesListesVides() {
+        AppareilIotImportResultatDto result = appareilIotService.importerCsv(
+                csv("identifiantMateriel,typeAppareil,conteneurId,camionId\n"));
+
+        assertThat(result.crees()).isEmpty();
+        assertThat(result.echecs()).isEmpty();
+    }
+
+    @Test
+    void importerCsvContinueApresUnEchecEtRapportePrecisementChaqueLigne() {
+        // ligne 2 : ok (conteneur) ; ligne 3 : identifiant deja pris ;
+        // ligne 4 : type invalide ; ligne 5 : conteneur ET camion fournis.
+        String contenu = String.join("\n",
+                "identifiantMateriel,typeAppareil,conteneurId,camionId",
+                "OK-1,CAPTEUR_BENNE," + CONTENEUR_ID + ",",
+                "DEJA-PRIS,CAPTEUR_BENNE," + CONTENEUR_ID + ",",
+                "MAUVAIS-TYPE,PAS_UN_TYPE," + CONTENEUR_ID + ",",
+                "DEUX-A-LA-FOIS,LECTEUR_RFID," + CONTENEUR_ID + "," + CAMION_ID,
+                ""
+        );
+
+        when(appareilIotRepository.existsByIdentifiantMateriel("OK-1")).thenReturn(false);
+        when(appareilIotRepository.existsByIdentifiantMateriel("DEJA-PRIS")).thenReturn(true);
+        when(conteneurRepository.findById(CONTENEUR_ID)).thenReturn(Optional.of(conteneur()));
+        when(apiKeyHasher.genererCle()).thenReturn("cle-en-clair");
+        when(apiKeyHasher.hash("cle-en-clair")).thenReturn("hash-simule");
+        when(appareilIotRepository.save(any(AppareilIot.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AppareilIotImportResultatDto result = appareilIotService.importerCsv(csv(contenu));
+
+        assertThat(result.crees()).hasSize(1);
+        assertThat(result.crees().get(0).identifiantMateriel()).isEqualTo("OK-1");
+
+        assertThat(result.echecs()).hasSize(3);
+        assertThat(result.echecs().get(0).ligne()).isEqualTo(3);
+        assertThat(result.echecs().get(0).identifiantMateriel()).isEqualTo("DEJA-PRIS");
+        assertThat(result.echecs().get(0).raison()).contains("déjà enregistré");
+        assertThat(result.echecs().get(1).ligne()).isEqualTo(4);
+        assertThat(result.echecs().get(1).raison()).contains("typeAppareil invalide");
+        assertThat(result.echecs().get(2).ligne()).isEqualTo(5);
+        assertThat(result.echecs().get(2).raison()).contains("pas les deux ni aucun des deux");
     }
 
     @Test

@@ -1,11 +1,14 @@
 package com.bidiws.service;
 
 import com.bidiws.dto.appareiliot.AppareilIotCreeResponseDto;
+import com.bidiws.dto.appareiliot.AppareilIotImportLigneErreurDto;
+import com.bidiws.dto.appareiliot.AppareilIotImportResultatDto;
 import com.bidiws.dto.appareiliot.AppareilIotRequestDto;
 import com.bidiws.dto.appareiliot.AppareilIotResponseDto;
 import com.bidiws.entity.AppareilIot;
 import com.bidiws.entity.Camion;
 import com.bidiws.entity.Conteneur;
+import com.bidiws.enums.TypeAppareilIot;
 import com.bidiws.repository.AppareilIotRepository;
 import com.bidiws.repository.CamionRepository;
 import com.bidiws.repository.ConteneurRepository;
@@ -14,8 +17,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -101,6 +110,96 @@ public class AppareilIotService {
             }
             appareil.setCamion(camion);
             appareil.setConteneur(null);
+        }
+    }
+
+    // Import en masse depuis un CSV : une ligne par appareil, memes champs
+    // que la creation unitaire (identifiantMateriel,typeAppareil,
+    // conteneurId,camionId, en-tete attendu sur la premiere ligne).
+    // Reutilise create(...) tel quel pour chaque ligne — meme validation
+    // XOR/unicite/existence que la creation unitaire, rien duplique.
+    //
+    // Volontairement PAS @Transactional ici : create(...) est appele en
+    // auto-invocation (this.create(...) dans la meme classe), qui ne passe
+    // pas par le proxy Spring donc ignore de toute facon son @Transactional
+    // — mais ca n'est pas un probleme puisque create() ne fait qu'un seul
+    // save() (deja atomique via Spring Data). Sans transaction englobante,
+    // chaque ligne reussie est committee independamment des autres :
+    // l'echec d'une ligne ne peut pas faire annuler les lignes precedentes
+    // ni bloquer les suivantes.
+    public AppareilIotImportResultatDto importerCsv(MultipartFile fichier) {
+
+        if (fichier == null || fichier.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fichier CSV vide ou manquant");
+        }
+
+        List<AppareilIotCreeResponseDto> crees = new ArrayList<>();
+        List<AppareilIotImportLigneErreurDto> echecs = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(fichier.getInputStream(), StandardCharsets.UTF_8))) {
+
+            String entete = reader.readLine();
+            if (entete == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fichier CSV vide");
+            }
+
+            String ligneBrute;
+            int numeroLigne = 1; // 1 = en-tete ; les donnees commencent a 2, comme dans un tableur
+            while ((ligneBrute = reader.readLine()) != null) {
+                numeroLigne++;
+                if (ligneBrute.isBlank()) continue;
+
+                // Split naif par virgule : suffisant pour ce format interne
+                // (identifiants materiels/enums/ids, pas de texte libre avec
+                // virgules a echapper) — pas de dependance a une lib CSV pour
+                // ce seul besoin.
+                String[] champs = ligneBrute.split(",", -1);
+                String identifiantMateriel = champ(champs, 0);
+
+                try {
+                    if (identifiantMateriel.isBlank()) {
+                        throw new IllegalArgumentException("identifiantMateriel manquant");
+                    }
+
+                    String typeBrut = champ(champs, 1);
+                    TypeAppareilIot type;
+                    try {
+                        type = TypeAppareilIot.valueOf(typeBrut.toUpperCase());
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException(
+                                "typeAppareil invalide : \"" + typeBrut + "\" (attendu CAPTEUR_BENNE ou LECTEUR_RFID)");
+                    }
+
+                    Long conteneurId = parseIdOptionnel(champ(champs, 2), "conteneurId");
+                    Long camionId = parseIdOptionnel(champ(champs, 3), "camionId");
+
+                    AppareilIotRequestDto dto = new AppareilIotRequestDto(identifiantMateriel, type, conteneurId, camionId);
+                    crees.add(create(dto));
+
+                } catch (ResponseStatusException e) {
+                    echecs.add(new AppareilIotImportLigneErreurDto(numeroLigne, identifiantMateriel, e.getReason()));
+                } catch (IllegalArgumentException e) {
+                    echecs.add(new AppareilIotImportLigneErreurDto(numeroLigne, identifiantMateriel, e.getMessage()));
+                }
+            }
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Impossible de lire le fichier CSV");
+        }
+
+        return new AppareilIotImportResultatDto(crees, echecs);
+    }
+
+    private String champ(String[] champs, int index) {
+        return index < champs.length ? champs[index].trim() : "";
+    }
+
+    private Long parseIdOptionnel(String valeur, String nomChamp) {
+        if (valeur == null || valeur.isBlank()) return null;
+        try {
+            return Long.parseLong(valeur);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(nomChamp + " invalide : \"" + valeur + "\" (doit être un nombre)");
         }
     }
 

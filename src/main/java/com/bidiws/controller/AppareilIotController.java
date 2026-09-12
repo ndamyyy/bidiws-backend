@@ -1,15 +1,18 @@
 package com.bidiws.controller;
 
 import com.bidiws.dto.appareiliot.AppareilIotCreeResponseDto;
+import com.bidiws.dto.appareiliot.AppareilIotImportResultatDto;
 import com.bidiws.dto.appareiliot.AppareilIotRequestDto;
 import com.bidiws.dto.appareiliot.AppareilIotResponseDto;
 import com.bidiws.service.AppareilIotService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -27,6 +30,14 @@ public class AppareilIotController {
     @PostMapping
     public ResponseEntity<AppareilIotCreeResponseDto> create(@Valid @RequestBody AppareilIotRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(appareilIotService.create(dto));
+    }
+
+    // Import en masse : une ligne par appareil, memes champs que la
+    // creation unitaire. Lecture seule sur les echecs — chaque ligne en
+    // erreur est rapportee avec sa raison, n'empeche pas les autres.
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AppareilIotImportResultatDto> importerCsv(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(appareilIotService.importerCsv(file));
     }
 
     @PutMapping("/{id}")
