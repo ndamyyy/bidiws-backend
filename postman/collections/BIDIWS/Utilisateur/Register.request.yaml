@@ -1,0 +1,5 @@
+$kind: http-request
+name: Register
+url: "http://localhost:8081/bidiws/auth/register "
+method: POST
+order: 1785084266971
