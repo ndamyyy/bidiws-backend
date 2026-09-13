@@ -1,5 +1,6 @@
 package com.bidiws.service;
 
+import com.bidiws.dto.residence.ResidencePublicDto;
 import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.entity.Residence;
 import com.bidiws.entity.Utilisateur;
@@ -19,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -215,6 +217,30 @@ class ResidenceServiceTest {
 
         assertThatCode(() -> residenceService.update(RESIDENCE_ID, dtoPour(VILLE_A_ID), syndic))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void getAllPublicNeRenvoieQueLesResidencesActivesAvecLesChampsRestreints() {
+        Residence residence = Residence.builder()
+                .id(RESIDENCE_ID)
+                .nom("Résidence Victor Hugo")
+                .adresse("1 rue Victor Hugo")
+                .codePostal("55400")
+                .ville(Ville.builder().id(VILLE_A_ID).nom("Étain").build())
+                .actif(true)
+                .build();
+
+        when(residenceRepository.findByActifTrue()).thenReturn(List.of(residence));
+
+        List<ResidencePublicDto> resultat = residenceService.getAllPublic();
+
+        assertThat(resultat).hasSize(1);
+        ResidencePublicDto dto = resultat.get(0);
+        assertThat(dto.id()).isEqualTo(RESIDENCE_ID);
+        assertThat(dto.nom()).isEqualTo("Résidence Victor Hugo");
+        assertThat(dto.adresse()).isEqualTo("1 rue Victor Hugo");
+        assertThat(dto.codePostal()).isEqualTo("55400");
+        assertThat(dto.villeNom()).isEqualTo("Étain");
     }
 
     @Test

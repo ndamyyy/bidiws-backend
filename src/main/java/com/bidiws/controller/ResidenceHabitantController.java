@@ -30,11 +30,16 @@ public class ResidenceHabitantController {
     // Demenagement : deplace l'habitant vers dto.residenceId() en retirant
     // d'abord tout lien existant (voir ResidenceHabitantService.changerResidence)
     // — pas un simple ajout a cote de l'ancien lien. Autorisation verifiee sur
-    // la residence de DESTINATION (celle que l'appelant gere).
+    // la residence de DESTINATION (celle que l'appelant gere), ou par
+    // l'habitant lui-meme (rattachement automatique a l'inscription, ou
+    // changement ulterieur) : c'est pour ca que ce endpoint est ouvert au
+    // HABITANT plutot que POST /affecter, qui ajouterait un second lien
+    // actif au lieu de remplacer l'eventuel lien existant.
     @PutMapping
     @PreAuthorize("hasRole('ADMIN') or @authorizationService.isMairieOfResidence(#dto.residenceId(), authentication) " +
             "or @authorizationService.isSyndicOfResidence(#dto.residenceId(), authentication) " +
-            "or @authorizationService.isGardienOfResidence(#dto.residenceId(), authentication)")
+            "or @authorizationService.isGardienOfResidence(#dto.residenceId(), authentication) " +
+            "or (hasRole('HABITANT') and @authorizationService.isSelf(#dto.habitantId(), authentication))")
     public ResponseEntity<ResidenceHabitantResponseDto> changerResidence(@Valid @RequestBody ResidenceHabitantRequestDto dto) {
         return ResponseEntity.ok(residenceHabitantService.changerResidence(dto));
     }
