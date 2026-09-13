@@ -1,17 +1,21 @@
 package com.bidiws.service;
 
 import com.bidiws.dto.utilisateur.ChangePasswordRequestDto;
+import com.bidiws.dto.utilisateur.InscriptionResponseDto;
 import com.bidiws.dto.utilisateur.ResetPasswordRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurAdminCreateRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurRegisterRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurResponseDto;
 import com.bidiws.dto.utilisateur.UtilisateurUpdateRequestDto;
 import com.bidiws.entity.ChauffeurCamion;
+import com.bidiws.entity.Residence;
+import com.bidiws.entity.ResidenceHabitant;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
 import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.ChauffeurCamionRepository;
+import com.bidiws.repository.ResidenceHabitantRepository;
 import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.repository.VilleRepository;
@@ -23,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +52,10 @@ class UtilisateurServiceTest {
     private TourneeRepository tourneeRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private RattachementResidenceService rattachementResidenceService;
+    @Mock
+    private ResidenceHabitantRepository residenceHabitantRepository;
 
     @InjectMocks
     private UtilisateurService utilisateurService;
@@ -67,7 +78,8 @@ class UtilisateurServiceTest {
 
     @Test
     void registerEchoueSiLemailExisteDeja() {
-        UtilisateurRegisterRequestDto dto = new UtilisateurRegisterRequestDto(EMAIL, "motdepasse123", "Diop", "Amy", null);
+        UtilisateurRegisterRequestDto dto = new UtilisateurRegisterRequestDto(
+                EMAIL, "motdepasse123", "Diop", "Amy", null, null, null, null, null, null);
         when(utilisateurRepository.existsByEmail(EMAIL)).thenReturn(true);
 
         assertThatThrownBy(() -> utilisateurService.register(dto))
@@ -77,7 +89,8 @@ class UtilisateurServiceTest {
 
     @Test
     void registerCreeUnCompteHabitantAvecMotDePasseHashe() {
-        UtilisateurRegisterRequestDto dto = new UtilisateurRegisterRequestDto(EMAIL, "motdepasse123", "Diop", "Amy", "770000000");
+        UtilisateurRegisterRequestDto dto = new UtilisateurRegisterRequestDto(
+                EMAIL, "motdepasse123", "Diop", "Amy", "770000000", null, null, null, null, null);
         when(utilisateurRepository.existsByEmail(EMAIL)).thenReturn(false);
         when(passwordEncoder.encode("motdepasse123")).thenReturn("hash");
         when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> {
@@ -86,10 +99,69 @@ class UtilisateurServiceTest {
             return u;
         });
 
-        UtilisateurResponseDto result = utilisateurService.register(dto);
+        InscriptionResponseDto result = utilisateurService.register(dto);
 
-        assertThat(result.role()).isEqualTo(Role.HABITANT);
-        assertThat(result.email()).isEqualTo(EMAIL);
+        assertThat(result.utilisateur().role()).isEqualTo(Role.HABITANT);
+        assertThat(result.utilisateur().email()).isEqualTo(EMAIL);
+        assertThat(result.residenceId()).isNull();
+        assertThat(result.zoneNonCouverte()).isFalse();
+    }
+
+    // ── register : rattachement automatique a une residence (adresse fournie) ──
+
+    @Test
+    void registerRattacheAUneResidenceExistanteProche() {
+        Ville ville = Ville.builder().id(VILLE_ID).nom("Dakar").codePostal("10000").build();
+        Residence residenceProche = Residence.builder()
+                .id(9L).nom("Résidence Existante").adresse("12 rue Test").codePostal("10000")
+                .ville(ville).latitude(new BigDecimal("14.7167")).longitude(new BigDecimal("-17.4677"))
+                .actif(true).build();
+
+        UtilisateurRegisterRequestDto dto = new UtilisateurRegisterRequestDto(
+                EMAIL, "motdepasse123", "Diop", "Amy", null,
+                "12 rue Test", "10000", "Dakar", new BigDecimal("14.7167"), new BigDecimal("-17.4677"));
+
+        when(utilisateurRepository.existsByEmail(EMAIL)).thenReturn(false);
+        when(passwordEncoder.encode("motdepasse123")).thenReturn("hash");
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> {
+            Utilisateur u = inv.getArgument(0);
+            u.setId(UTILISATEUR_ID);
+            return u;
+        });
+        when(rattachementResidenceService.rattacher(
+                "12 rue Test", "10000", "Dakar", new BigDecimal("14.7167"), new BigDecimal("-17.4677")))
+                .thenReturn(RattachementResidenceService.Resultat.rattache(residenceProche));
+
+        InscriptionResponseDto result = utilisateurService.register(dto);
+
+        assertThat(result.residenceId()).isEqualTo(9L);
+        assertThat(result.residenceNom()).isEqualTo("Résidence Existante");
+        assertThat(result.zoneNonCouverte()).isFalse();
+        verify(residenceHabitantRepository).save(any(ResidenceHabitant.class));
+    }
+
+    @Test
+    void registerCreeLeCompteSansResidenceSiZoneNonCouverte() {
+        UtilisateurRegisterRequestDto dto = new UtilisateurRegisterRequestDto(
+                EMAIL, "motdepasse123", "Diop", "Amy", null,
+                "1 rue Inconnue", "99999", "VilleInconnue", new BigDecimal("1"), new BigDecimal("1"));
+
+        when(utilisateurRepository.existsByEmail(EMAIL)).thenReturn(false);
+        when(passwordEncoder.encode("motdepasse123")).thenReturn("hash");
+        when(utilisateurRepository.save(any(Utilisateur.class))).thenAnswer(inv -> {
+            Utilisateur u = inv.getArgument(0);
+            u.setId(UTILISATEUR_ID);
+            return u;
+        });
+        when(rattachementResidenceService.rattacher(
+                "1 rue Inconnue", "99999", "VilleInconnue", new BigDecimal("1"), new BigDecimal("1")))
+                .thenReturn(RattachementResidenceService.Resultat.nonCouvert());
+
+        InscriptionResponseDto result = utilisateurService.register(dto);
+
+        assertThat(result.residenceId()).isNull();
+        assertThat(result.zoneNonCouverte()).isTrue();
+        verify(residenceHabitantRepository, never()).save(any());
     }
 
     @Test
