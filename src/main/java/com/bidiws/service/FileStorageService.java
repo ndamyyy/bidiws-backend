@@ -21,12 +21,6 @@ public class FileStorageService {
             "image/jpeg", "image/png", "image/webp", "image/gif"
     );
 
-    // Doublon volontaire de spring.servlet.multipart.max-file-size : cette
-    // propriete vit dans application.properties, qui est gitignore (secrets
-    // DB) — sans garde cote code, un environnement sans cette ligne
-    // retomberait sur le defaut Spring (1 Mo) avec un message trompeur.
-    private static final long TAILLE_MAX_OCTETS = 5L * 1024 * 1024;
-
     @Value("${bidiws.upload.dir:uploads}")
     private String uploadDir;
 
@@ -43,11 +37,6 @@ public class FileStorageService {
         if (contentType == null || !TYPES_AUTORISES.contains(contentType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Type de fichier non autorise — images uniquement (jpeg, png, webp, gif)");
-        }
-
-        if (file.getSize() > TAILLE_MAX_OCTETS) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "Fichier trop volumineux (5 Mo maximum)");
         }
 
         String extension = extensionPour(contentType);
