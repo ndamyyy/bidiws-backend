@@ -1,6 +1,8 @@
 package com.bidiws.service;
 
+import com.bidiws.dto.auth.LoginResponseDto;
 import com.bidiws.dto.utilisateur.UtilisateurLoginRequestDto;
+import com.bidiws.entity.RefreshToken;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.enums.Role;
 import com.bidiws.repository.UtilisateurRepository;
@@ -17,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +43,8 @@ class AuthServiceTest {
     private UtilisateurRepository utilisateurRepository;
     @Mock
     private JwtService jwtService;
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private AuthService authService;
@@ -103,11 +108,13 @@ class AuthServiceTest {
     void verrouillageExpireDeverrouilleAutomatiquementEtReinitialiseLeCompteur() {
         Utilisateur utilisateur = utilisateur((short) 5, LocalDateTime.now().minusMinutes(1));
         when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
-        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-token");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-access-token");
+        when(refreshTokenService.creerNouvelleFamille(utilisateur)).thenReturn("un-refresh-token");
 
-        String token = authService.login(dto());
+        LoginResponseDto result = authService.login(dto());
 
-        assertThat(token).isEqualTo("un-token");
+        assertThat(result.accessToken()).isEqualTo("un-access-token");
+        assertThat(result.refreshToken()).isEqualTo("un-refresh-token");
         assertThat(utilisateur.getTentativesEchouees()).isEqualTo((short) 0);
         assertThat(utilisateur.getVerrouilleJusqua()).isNull();
         verify(authenticationManager).authenticate(any());
@@ -117,11 +124,13 @@ class AuthServiceTest {
     void loginReussiReinitialiseLeCompteurMemeApresDesEchecsPrecedents() {
         Utilisateur utilisateur = utilisateur((short) 3, null);
         when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
-        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-token");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-access-token");
+        when(refreshTokenService.creerNouvelleFamille(utilisateur)).thenReturn("un-refresh-token");
 
-        String token = authService.login(dto());
+        LoginResponseDto result = authService.login(dto());
 
-        assertThat(token).isEqualTo("un-token");
+        assertThat(result.accessToken()).isEqualTo("un-access-token");
+        assertThat(result.refreshToken()).isEqualTo("un-refresh-token");
         assertThat(utilisateur.getTentativesEchouees()).isEqualTo((short) 0);
         assertThat(utilisateur.getVerrouilleJusqua()).isNull();
     }
@@ -130,11 +139,51 @@ class AuthServiceTest {
     void loginReussiSansEchecsPrealablesNeDeclencheAucuneSauvegardeInutile() {
         Utilisateur utilisateur = utilisateur((short) 0, null);
         when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
-        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-token");
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-access-token");
+        when(refreshTokenService.creerNouvelleFamille(utilisateur)).thenReturn("un-refresh-token");
 
         authService.login(dto());
 
         verify(utilisateurRepository, never()).save(any());
+    }
+
+    // ── login : emet aussi un refresh token ──────────────────────────
+
+    @Test
+    void loginEmetUnRefreshTokenPourLutilisateurAuthentifie() {
+        Utilisateur utilisateur = utilisateur((short) 0, null);
+        when(utilisateurRepository.findByEmail(EMAIL)).thenReturn(Optional.of(utilisateur));
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("un-access-token");
+        when(refreshTokenService.creerNouvelleFamille(utilisateur)).thenReturn("un-refresh-token");
+
+        LoginResponseDto result = authService.login(dto());
+
+        assertThat(result.refreshToken()).isEqualTo("un-refresh-token");
+        verify(refreshTokenService).creerNouvelleFamille(utilisateur);
+    }
+
+    // ── refresh : orchestration (la logique de validation/rotation est
+    //    testee en detail dans RefreshTokenServiceTest) ────────────────
+
+    @Test
+    void refreshFaitPivoterLeTokenEtRenvoieUneNouvellePaire() {
+        Utilisateur utilisateur = utilisateur((short) 0, null);
+        UUID familleId = UUID.randomUUID();
+        RefreshToken ancienToken = RefreshToken.builder()
+                .id(10L)
+                .utilisateur(utilisateur)
+                .familleId(familleId)
+                .build();
+
+        when(refreshTokenService.consommerPourRotation("ancien-refresh-token")).thenReturn(ancienToken);
+        when(jwtService.generateToken(any(CustomUserDetails.class))).thenReturn("nouvel-access-token");
+        when(refreshTokenService.creerToken(utilisateur, familleId)).thenReturn("nouveau-refresh-token");
+
+        LoginResponseDto result = authService.refresh("ancien-refresh-token");
+
+        assertThat(result.accessToken()).isEqualTo("nouvel-access-token");
+        assertThat(result.refreshToken()).isEqualTo("nouveau-refresh-token");
+        verify(refreshTokenService).creerToken(utilisateur, familleId);
     }
 
     @Test

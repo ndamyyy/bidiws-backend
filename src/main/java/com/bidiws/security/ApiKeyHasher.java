@@ -9,13 +9,14 @@ import java.util.Base64;
 import java.util.HexFormat;
 
 /**
- * Genere et hash les cles API des appareils IoT. SHA-256, pas BCrypt :
- * la cle est generee ici (haute entropie, 256 bits), pas choisie par un
- * humain, donc un hash rapide et deterministe suffit contre le vol de
- * dump — et surtout permet un lookup direct par hash (AppareilIotRepository
- * .findByCleApiHash), impossible avec un hash sale comme BCrypt puisque
- * la requete /iot/detections ne transporte que la cle, sans identifiant
- * device separe.
+ * Genere et hash des jetons opaques haute entropie (cles API des
+ * appareils IoT, refresh tokens). SHA-256, pas BCrypt : le jeton est
+ * genere ici (haute entropie, 256 bits), pas choisi par un humain, donc
+ * un hash rapide et deterministe suffit contre le vol de dump — et
+ * surtout permet un lookup direct par hash (AppareilIotRepository
+ * .findByCleApiHash, RefreshTokenRepository.findByTokenHash), impossible
+ * avec un hash sale comme BCrypt puisque ces requetes ne transportent que
+ * le jeton, sans identifiant separe.
  */
 @Component
 public class ApiKeyHasher {

@@ -1,6 +1,8 @@
 package com.bidiws.service;
 
+import com.bidiws.dto.auth.LoginResponseDto;
 import com.bidiws.dto.utilisateur.UtilisateurLoginRequestDto;
+import com.bidiws.entity.RefreshToken;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.security.CustomUserDetails;
@@ -28,13 +30,14 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UtilisateurRepository utilisateurRepository;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     // PAS de @Transactional ici : enregistrerEchec() doit persister meme
     // quand la methode se termine par une exception relancee — un
     // @Transactional englobant aurait annule ce save au rollback. Chaque
     // repository.save() gere sa propre transaction (comportement par
     // defaut de Spring Data JPA), ce qui est exactement ce qu'il faut.
-    public String login(UtilisateurLoginRequestDto dto) {
+    public LoginResponseDto login(UtilisateurLoginRequestDto dto) {
 
         Optional<Utilisateur> utilisateurOpt = utilisateurRepository.findByEmail(dto.email());
 
@@ -60,7 +63,25 @@ public class AuthService {
 
         // CustomUserDetails (pas un User Spring generique) : JwtService pose
         // desormais l'ID comme sujet du token, pas l'email — voir JwtService.
-        return jwtService.generateToken(new CustomUserDetails(utilisateur));
+        String accessToken = jwtService.generateToken(new CustomUserDetails(utilisateur));
+        String refreshToken = refreshTokenService.creerNouvelleFamille(utilisateur);
+
+        return new LoginResponseDto(accessToken, refreshToken);
+    }
+
+    // Fait pivoter le refresh token presente : le consomme (usage unique),
+    // emet un nouvel access token et un nouveau refresh token dans la meme
+    // chaine de rotation. RefreshTokenService rejette (401) si le token est
+    // invalide, expire, revoque, ou deja consomme (reutilisation detectee —
+    // revoque alors toute la chaine).
+    public LoginResponseDto refresh(String refreshTokenEnClair) {
+        RefreshToken ancienToken = refreshTokenService.consommerPourRotation(refreshTokenEnClair);
+        Utilisateur utilisateur = ancienToken.getUtilisateur();
+
+        String accessToken = jwtService.generateToken(new CustomUserDetails(utilisateur));
+        String nouveauRefreshToken = refreshTokenService.creerToken(utilisateur, ancienToken.getFamilleId());
+
+        return new LoginResponseDto(accessToken, nouveauRefreshToken);
     }
 
     // Un compte verrouille le reste meme avec le bon mot de passe, jusqu'a

@@ -1,5 +1,7 @@
 package com.bidiws.controller;
 
+import com.bidiws.dto.auth.LoginResponseDto;
+import com.bidiws.dto.auth.RefreshRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurLoginRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurRegisterRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurResponseDto;
@@ -13,8 +15,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -32,8 +32,12 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@Valid @RequestBody UtilisateurLoginRequestDto loginDto) {
-        String token = authService.login(loginDto);
-        return ResponseEntity.ok(Map.of("token", token));
+    public ResponseEntity<LoginResponseDto> login(@Valid @RequestBody UtilisateurLoginRequestDto loginDto) {
+        return ResponseEntity.ok(authService.login(loginDto));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponseDto> refresh(@Valid @RequestBody RefreshRequestDto dto) {
+        return ResponseEntity.ok(authService.refresh(dto.refreshToken()));
     }
 }
