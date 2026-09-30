@@ -1,11 +1,14 @@
 package com.bidiws.service;
 
 import com.bidiws.dto.utilisateur.*;
+import com.bidiws.entity.ResidenceHabitant;
+import com.bidiws.entity.ResidenceHabitantId;
 import com.bidiws.entity.Utilisateur;
 import com.bidiws.entity.Ville;
 import com.bidiws.enums.Role;
 import com.bidiws.enums.StatutTournee;
 import com.bidiws.repository.ChauffeurCamionRepository;
+import com.bidiws.repository.ResidenceHabitantRepository;
 import com.bidiws.repository.TourneeRepository;
 import com.bidiws.repository.UtilisateurRepository;
 import com.bidiws.repository.VilleRepository;
@@ -27,6 +30,8 @@ public class UtilisateurService {
     private final ChauffeurCamionRepository chauffeurCamionRepository;
     private final TourneeRepository tourneeRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RattachementResidenceService rattachementResidenceService;
+    private final ResidenceHabitantRepository residenceHabitantRepository;
 
     // Message volontairement informatif (pas generique type "requete
     // invalide") : un utilisateur legitime qui retente une inscription doit
@@ -39,7 +44,7 @@ public class UtilisateurService {
     // il rend l'enumeration a grande echelle impraticable sans degrader le
     // message pour un usage normal.
     @Transactional
-    public UtilisateurResponseDto register(UtilisateurRegisterRequestDto dto) {
+    public InscriptionResponseDto register(UtilisateurRegisterRequestDto dto) {
 
         if (utilisateurRepository.existsByEmail(dto.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Un compte existe déjà avec cet email");
@@ -55,7 +60,31 @@ public class UtilisateurService {
                 .actif(true)
                 .build();
 
-        return toResponseDto(utilisateurRepository.save(utilisateur));
+        utilisateur = utilisateurRepository.save(utilisateur);
+        UtilisateurResponseDto utilisateurDto = toResponseDto(utilisateur);
+
+        // Adresse optionnelle : pas de rattachement tente si elle est absente
+        // (ni residence rattachee, ni "zone non couverte" — l'habitant n'a
+        // simplement pas indique d'adresse).
+        if (dto.adresse() == null || dto.ville() == null || dto.latitude() == null || dto.longitude() == null) {
+            return new InscriptionResponseDto(utilisateurDto, null, null, false);
+        }
+
+        RattachementResidenceService.Resultat resultat = rattachementResidenceService.rattacher(
+                dto.adresse(), dto.codePostal(), dto.ville(), dto.latitude(), dto.longitude());
+
+        if (resultat.zoneNonCouverte()) {
+            return new InscriptionResponseDto(utilisateurDto, null, null, true);
+        }
+
+        var residence = resultat.residence();
+        residenceHabitantRepository.save(ResidenceHabitant.builder()
+                .residenceHabitantId(new ResidenceHabitantId(residence.getId(), utilisateur.getId()))
+                .residence(residence)
+                .habitant(utilisateur)
+                .build());
+
+        return new InscriptionResponseDto(utilisateurDto, residence.getId(), residence.getNom(), false);
     }
 
     @Transactional

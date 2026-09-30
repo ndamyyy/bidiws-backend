@@ -1,5 +1,6 @@
 package com.bidiws.controller;
 
+import com.bidiws.dto.residence.ResidencePublicDto;
 import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.dto.residence.ResidenceResponseDto;
 import com.bidiws.security.CustomUserDetails;
@@ -20,6 +21,17 @@ import java.util.List;
 public class ResidenceController {
 
     private final ResidenceService residenceService;
+
+    // Sans authentification (voir SecurityConfig.PUBLIC_ROUTES) : alimente
+    // l'autocomplete de residence sur le formulaire d'inscription habitant,
+    // avant qu'un compte/token n'existe. Chemin litteral "/publiques" avant
+    // le "/{id}" plus bas : Spring priorise un segment litteral sur une
+    // variable de chemin, donc l'ordre de declaration n'a pas d'impact reel,
+    // mais autant rester lisible.
+    @GetMapping("/publiques")
+    public ResponseEntity<List<ResidencePublicDto>> getAllPublic() {
+        return ResponseEntity.ok(residenceService.getAllPublic());
+    }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MAIRIE')")

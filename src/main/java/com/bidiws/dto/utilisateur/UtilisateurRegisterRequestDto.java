@@ -1,10 +1,10 @@
 package com.bidiws.dto.utilisateur;
 
-import com.bidiws.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
 
 public record UtilisateurRegisterRequestDto(
 
@@ -22,5 +22,21 @@ public record UtilisateurRegisterRequestDto(
         @NotBlank
         String prenom,
 
-        String telephone
+        String telephone,
+
+        // Adresse choisie via l'autocomplete API Adresse (data.gouv.fr) sur
+        // le formulaire d'inscription — tous optionnels : un habitant peut
+        // toujours s'inscrire sans indiquer d'adresse, auquel cas aucun
+        // rattachement automatique n'est tente (voir UtilisateurService.
+        // register). Quand fournis, adresse/ville/latitude/longitude sont
+        // tous attendus ensemble (ce que le frontend garantit deja).
+        String adresse,
+
+        String codePostal,
+
+        String ville,
+
+        BigDecimal latitude,
+
+        BigDecimal longitude
 ) {}

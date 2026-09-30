@@ -13,6 +13,11 @@ public interface VilleRepository extends JpaRepository<Ville, Long> {
     Optional<Ville> findByNom(String nom);
     boolean existsByNom(String nom);
 
+    // Insensible a la casse : le nom de commune renvoye par l'API Adresse
+    // (data.gouv.fr) ne correspond pas forcement exactement a la casse
+    // saisie lors de l'embarquement de la Ville en base.
+    Optional<Ville> findByNomIgnoreCase(String nom);
+
     Optional<Ville> findByCodePostal(String codePostal);
     boolean existsByCodePostal(String codePostal);
 

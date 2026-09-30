@@ -51,6 +51,7 @@ public class SecurityConfig {
             "/auth/login",
             "/auth/register",
             "/auth/refresh",
+            "/residences/publiques",
             "/error",
             "/ws/**",
             "/files/**"

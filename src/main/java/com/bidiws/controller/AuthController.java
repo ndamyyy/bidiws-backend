@@ -2,9 +2,9 @@ package com.bidiws.controller;
 
 import com.bidiws.dto.auth.LoginResponseDto;
 import com.bidiws.dto.auth.RefreshRequestDto;
+import com.bidiws.dto.utilisateur.InscriptionResponseDto;
 import com.bidiws.dto.utilisateur.UtilisateurLoginRequestDto;
 import com.bidiws.dto.utilisateur.UtilisateurRegisterRequestDto;
-import com.bidiws.dto.utilisateur.UtilisateurResponseDto;
 import com.bidiws.service.AuthService;
 import com.bidiws.service.UtilisateurService;
 import jakarta.validation.Valid;
@@ -25,10 +25,9 @@ public class AuthController {
     private final UtilisateurService utilisateurService;
 
     @PostMapping("/register")
-    public ResponseEntity<UtilisateurResponseDto> register(@Valid @RequestBody UtilisateurRegisterRequestDto registerDto) {
-        UtilisateurResponseDto responseDto = utilisateurService.register(registerDto);
+    public ResponseEntity<InscriptionResponseDto> register(@Valid @RequestBody UtilisateurRegisterRequestDto registerDto) {
+        InscriptionResponseDto responseDto = utilisateurService.register(registerDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
-
     }
 
     @PostMapping("/login")

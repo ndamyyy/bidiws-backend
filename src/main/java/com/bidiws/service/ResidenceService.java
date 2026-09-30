@@ -1,5 +1,6 @@
 package com.bidiws.service;
 
+import com.bidiws.dto.residence.ResidencePublicDto;
 import com.bidiws.dto.residence.ResidenceRequestDto;
 import com.bidiws.dto.residence.ResidenceResponseDto;
 import com.bidiws.entity.*;
@@ -214,6 +215,22 @@ public class ResidenceService {
                 .filter(r -> villeId == null || r.getVille().getId().equals(villeId))
                 .filter(r -> zoneId == null || (r.getZone() != null && r.getZone().getId().equals(zoneId)))
                 .map(this::toResponseDto)
+                .toList();
+    }
+
+    // Sans authentification (formulaire d'inscription habitant) : liste
+    // complete des residences actives, champs restreints (voir
+    // ResidencePublicDto). Pas de scope par role puisqu'il n'y a pas
+    // encore d'utilisateur authentifie a ce stade.
+    public List<ResidencePublicDto> getAllPublic() {
+        return residenceRepository.findByActifTrue().stream()
+                .map(r -> new ResidencePublicDto(
+                        r.getId(),
+                        r.getNom(),
+                        r.getAdresse(),
+                        r.getCodePostal(),
+                        r.getVille().getNom()
+                ))
                 .toList();
     }
 
