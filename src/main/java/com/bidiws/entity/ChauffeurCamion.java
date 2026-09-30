@@ -29,4 +29,8 @@ public class ChauffeurCamion {
 
     @Column(name = "date_fin")
     private LocalDate dateFin;
+
+    public LocalDate getDateDebut() {
+        return chauffeurCamionId.getDateDebut();
+    }
 }
